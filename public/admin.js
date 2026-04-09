@@ -121,7 +121,13 @@ async function renderEvent(event) {
     margin: 1
   });
 
-  await loadRoster(event.id);
+  try {
+    await loadRoster(event.id);
+  } catch (error) {
+    rosterCount.textContent = '명부를 불러오지 못했습니다. 새로고침 버튼으로 다시 시도해 주세요.';
+    rosterBody.innerHTML = '';
+    console.error(error);
+  }
 }
 
 async function loadAvailablePeriods() {
@@ -245,9 +251,9 @@ createForm.addEventListener('submit', async (e) => {
       meeting_date: formData.get('meeting_date')
     });
 
-    createMsg.textContent = '회의가 생성되었습니다. QR을 참석자에게 공유하세요.';
-    createMsg.className = 'msg success';
     await renderEvent(event);
+    createMsg.textContent = '회의가 생성되었고 QR이 즉시 생성되었습니다.';
+    createMsg.className = 'msg success';
   } catch (err) {
     createMsg.textContent = err.message;
     createMsg.className = 'msg error';
