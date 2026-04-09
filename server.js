@@ -4,6 +4,7 @@ const express = require('express');
 const cors = require('cors');
 const axios = require('axios');
 const nodemailer = require('nodemailer');
+const PDFDocument = require('pdfkit');
 const { XMLParser } = require('fast-xml-parser');
 
 const app = express();
@@ -289,6 +290,82 @@ function summarizeBy(items, key) {
   return Array.from(map.entries()).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count);
 }
 
+function parseIssueIds(input) {
+  if (!Array.isArray(input)) return [];
+  const out = [];
+  for (const v of input) {
+    const n = Number(v);
+    if (!Number.isFinite(n)) continue;
+    out.push(n);
+  }
+  return [...new Set(out)];
+}
+
+function pickIssues(items, issueIds) {
+  const ids = parseIssueIds(issueIds);
+  if (ids.length === 0) return items;
+  const set = new Set(ids);
+  return items.filter((row) => set.has(Number(row.id)));
+}
+
+function buildPeriodItems(type, value, issueIds = []) {
+  const items = listNewsByPeriod(type, value).sort((a, b) => new Date(b.published_at) - new Date(a.published_at));
+  return pickIssues(items, issueIds);
+}
+
+function buildReportSummaryLines(items, label) {
+  const byCategory = summarizeBy(items, 'category').slice(0, 8);
+  const byField = summarizeBy(items, 'field').slice(0, 8);
+  const lines = [
+    `리포트 기간: ${label}`,
+    `생성시각: ${new Date().toISOString()}`,
+    `총 이슈 수: ${items.length}건`,
+    ''
+  ];
+  lines.push('[카테고리 요약]');
+  if (byCategory.length === 0) lines.push('- 데이터 없음');
+  byCategory.forEach((it) => lines.push(`- ${it.name}: ${it.count}건`));
+  lines.push('');
+  lines.push('[분야 요약]');
+  if (byField.length === 0) lines.push('- 데이터 없음');
+  byField.forEach((it) => lines.push(`- ${it.name}: ${it.count}건`));
+  return lines;
+}
+
+function generateLaborReportPdfBuffer(items, label) {
+  return new Promise((resolve, reject) => {
+    const doc = new PDFDocument({ size: 'A4', margin: 50 });
+    const chunks = [];
+    doc.on('data', (chunk) => chunks.push(chunk));
+    doc.on('end', () => resolve(Buffer.concat(chunks)));
+    doc.on('error', reject);
+
+    doc.fontSize(20).text('노동 이슈 리포트', { align: 'left' });
+    doc.moveDown(0.5);
+    doc.fontSize(12);
+    const summaryLines = buildReportSummaryLines(items, label);
+    summaryLines.forEach((line) => doc.text(line));
+
+    doc.addPage();
+    doc.fontSize(16).text('상세 이슈 목록', { align: 'left' });
+    doc.moveDown(0.5);
+    doc.fontSize(10);
+    if (items.length === 0) {
+      doc.text('선택된 이슈가 없습니다.');
+    } else {
+      items.forEach((item, idx) => {
+        doc.text(`${idx + 1}. [${item.category}] [${item.field}]`);
+        doc.text(`${item.title || ''}`);
+        doc.text(`발행일: ${item.published_at || ''}`);
+        if (item.link) doc.text(`링크: ${item.link}`);
+        doc.moveDown(0.7);
+      });
+    }
+
+    doc.end();
+  });
+}
+
 function buildReportText(items, label) {
   const lines = [`[MOEL Report] ${label}`, `Generated: ${new Date().toISOString()}`, ''];
   const byCat = new Map();
@@ -325,7 +402,7 @@ function buildReportHtml(items, label) {
   </div>`;
 }
 
-async function sendEmailReport(recipients, subject, textBody, htmlBody) {
+async function sendEmailReport(recipients, subject, textBody, htmlBody, attachments = []) {
   if (!SMTP_HOST || !SMTP_USER || !SMTP_PASS || recipients.length === 0) {
     return { sent: 0, skipped: true, reason: 'SMTP not configured or no recipients' };
   }
@@ -342,7 +419,8 @@ async function sendEmailReport(recipients, subject, textBody, htmlBody) {
     bcc: recipients,
     subject,
     text: textBody,
-    html: htmlBody
+    html: htmlBody,
+    attachments
   });
 
   return { sent: recipients.length, skipped: false };
@@ -366,8 +444,8 @@ function selectRecipientEmails(selectedEmails = []) {
   return allConsentEmails.filter((email) => selected.has(email));
 }
 
-async function sendPeriodReport(type, value, selectedEmails = []) {
-  const items = listNewsByPeriod(type, value);
+async function sendPeriodReport(type, value, selectedEmails = [], issueIds = []) {
+  const items = buildPeriodItems(type, value, issueIds);
   const emails = selectRecipientEmails(selectedEmails);
 
   const label = `${type}:${value}`;
@@ -376,7 +454,15 @@ async function sendPeriodReport(type, value, selectedEmails = []) {
   const html = buildReportHtml(items, label);
 
   try {
-    const emailResult = await sendEmailReport(emails, subject, text, html);
+    const pdfBuffer = await generateLaborReportPdfBuffer(items, label);
+    const fileSafeLabel = label.replace(/[^a-zA-Z0-9:_-]/g, '_').replace(':', '_');
+    const attachments = [{
+      filename: `labor_report_${fileSafeLabel}.pdf`,
+      content: pdfBuffer,
+      contentType: 'application/pdf'
+    }];
+
+    const emailResult = await sendEmailReport(emails, subject, text, html, attachments);
     const status = emailResult.skipped ? 'SKIPPED' : 'SENT';
 
     state.report_logs.push({
@@ -386,7 +472,7 @@ async function sendPeriodReport(type, value, selectedEmails = []) {
       recipient_phone_count: 0,
       item_count: items.length,
       status,
-      detail: JSON.stringify({ type, value, selected_count: selectedEmails.length, emailResult })
+      detail: JSON.stringify({ type, value, selected_count: selectedEmails.length, selected_issue_count: parseIssueIds(issueIds).length, emailResult })
     });
     saveState();
 
@@ -673,11 +759,40 @@ app.get('/api/reports/period', (req, res) => {
     return res.status(400).json({ message: 'Invalid type.' });
   }
 
-  const items = listNewsByPeriod(type, value).sort((a, b) => new Date(b.published_at) - new Date(a.published_at));
+  const issueIds = String(req.query.issue_ids || '')
+    .split(',')
+    .map((x) => Number(x))
+    .filter((n) => Number.isFinite(n));
+
+  const items = buildPeriodItems(type, value, issueIds);
   const by_category = summarizeBy(items, 'category');
   const by_field = summarizeBy(items, 'field');
 
   res.json({ period_type: type, period_value: value, count: items.length, by_category, by_field, items });
+});
+
+app.get('/api/reports/period-pdf', async (req, res) => {
+  const type = String(req.query.type || 'month');
+  const value = String(req.query.value || monthKeyNow());
+  if (!['month', 'quarter', 'half', 'year'].includes(type)) {
+    return res.status(400).json({ message: 'Invalid type.' });
+  }
+
+  const issueIds = String(req.query.issue_ids || '')
+    .split(',')
+    .map((x) => Number(x))
+    .filter((n) => Number.isFinite(n));
+  const items = buildPeriodItems(type, value, issueIds);
+  const label = `${type}:${value}`;
+
+  try {
+    const pdfBuffer = await generateLaborReportPdfBuffer(items, label);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename=labor_report_${type}_${value}.pdf`);
+    return res.send(pdfBuffer);
+  } catch (error) {
+    return res.status(500).json({ message: String(error?.message || error) });
+  }
 });
 
 app.get('/api/reports/available-periods', (_, res) => {
@@ -692,18 +807,20 @@ app.post('/api/reports/send-period', async (req, res) => {
   const type = String(req.body?.type || 'month');
   const value = String(req.body?.value || previousMonthKey(new Date()));
   const recipientEmails = Array.isArray(req.body?.recipient_emails) ? req.body.recipient_emails : [];
+  const issueIds = Array.isArray(req.body?.issue_ids) ? req.body.issue_ids : [];
   if (!['month', 'quarter', 'half', 'year'].includes(type)) {
     return res.status(400).json({ message: 'Invalid type.' });
   }
-  const result = await sendPeriodReport(type, value, recipientEmails);
+  const result = await sendPeriodReport(type, value, recipientEmails, issueIds);
   res.json(result);
 });
 
 app.post('/api/reports/send-now', async (req, res) => {
   const month = monthKeyNow();
   const recipientEmails = Array.isArray(req.body?.recipient_emails) ? req.body.recipient_emails : [];
+  const issueIds = Array.isArray(req.body?.issue_ids) ? req.body.issue_ids : [];
   await collectLaborNewsForMonth(month);
-  const result = await sendPeriodReport('month', month, recipientEmails);
+  const result = await sendPeriodReport('month', month, recipientEmails, issueIds);
   res.json(result);
 });
 

@@ -47,6 +47,10 @@ const collectSourceStats = document.getElementById('collectSourceStats');
 const categorySummary = document.getElementById('categorySummary');
 const fieldSummary = document.getElementById('fieldSummary');
 const reportPreview = document.getElementById('reportPreview');
+const selectAllIssuesBtn = document.getElementById('selectAllIssuesBtn');
+const clearIssuesBtn = document.getElementById('clearIssuesBtn');
+const downloadPdfBtn = document.getElementById('downloadPdfBtn');
+const issueSelectMsg = document.getElementById('issueSelectMsg');
 const loadLogsBtn = document.getElementById('loadLogsBtn');
 const reportLogsBody = document.getElementById('reportLogsBody');
 
@@ -54,6 +58,7 @@ let currentEventId = null;
 let currentEventTitle = '';
 let currentEventDate = '';
 let recipientCandidates = [];
+let currentReportItems = [];
 
 const portalUrl = `${window.location.origin}/portal.html`;
 
@@ -151,6 +156,18 @@ function renderRecipientCandidates(items) {
     el.addEventListener('change', () => updateRecipientSummaryText(recipientCandidates.length));
   });
   updateRecipientSummaryText(recipientCandidates.length);
+}
+
+function getSelectedIssueIds() {
+  return Array.from(document.querySelectorAll('.issue-check:checked'))
+    .map((el) => Number(el.value))
+    .filter((v) => Number.isFinite(v));
+}
+
+function updateIssueSelectionMessage() {
+  const selected = getSelectedIssueIds().length;
+  issueSelectMsg.textContent = `이슈 ${currentReportItems.length}건 중 ${selected}건 선택`;
+  issueSelectMsg.className = 'msg';
 }
 
 async function loadRecipientCandidates() {
@@ -320,30 +337,38 @@ async function loadPeriodSummary() {
   const data = await res.json();
   if (!res.ok) throw new Error(data.message || '기간 리포트 조회 실패');
 
+  currentReportItems = data.items || [];
   renderChips(categorySummary, data.by_category || []);
   renderChips(fieldSummary, data.by_field || []);
 
-  reportPreview.innerHTML = (data.items || []).map((item) => `
+  reportPreview.innerHTML = currentReportItems.map((item) => `
     <div class="report-item">
+      <label><input class="issue-check" type="checkbox" value="${Number(item.id)}" /> 발송 선택</label>
       <strong>[${escapeHtml(item.category)} / ${escapeHtml(item.field)}]</strong>
       <a href="${escapeHtml(item.link || '#')}" target="_blank" rel="noopener">${escapeHtml(item.title)}</a>
       <span>${escapeHtml(item.published_at)}</span>
     </div>
   `).join('');
 
-  if (!data.items || !data.items.length) {
+  if (!currentReportItems.length) {
     reportPreview.innerHTML = '<p>해당 기간 데이터가 없습니다.</p>';
   }
+  document.querySelectorAll('.issue-check').forEach((el) => {
+    el.addEventListener('change', updateIssueSelectionMessage);
+  });
+  updateIssueSelectionMessage();
 
   return data;
 }
 
 async function sendPeriodReport() {
   const recipientEmails = getSelectedRecipientEmails();
+  const issueIds = getSelectedIssueIds();
   const payload = {
     type: periodType.value,
     value: periodValue.value,
-    recipient_emails: recipientEmails
+    recipient_emails: recipientEmails,
+    issue_ids: issueIds
   };
 
   const res = await fetch('/api/reports/send-period', {
@@ -358,7 +383,10 @@ async function sendPeriodReport() {
 }
 
 async function sendNowReport() {
-  const payload = { recipient_emails: getSelectedRecipientEmails() };
+  const payload = {
+    recipient_emails: getSelectedRecipientEmails(),
+    issue_ids: getSelectedIssueIds()
+  };
   const res = await fetch('/api/reports/send-now', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -383,6 +411,15 @@ async function loadReportLogs() {
       <td>${escapeHtml(it.detail || '')}</td>
     </tr>
   `).join('');
+}
+
+function downloadPeriodPdf() {
+  const type = periodType.value;
+  const value = periodValue.value;
+  const issueIds = getSelectedIssueIds();
+  const params = new URLSearchParams({ type, value });
+  if (issueIds.length > 0) params.set('issue_ids', issueIds.join(','));
+  window.open(`/api/reports/period-pdf?${params.toString()}`, '_blank', 'noopener');
 }
 
 function printRoster() {
@@ -462,6 +499,17 @@ clearRecipientsBtn.addEventListener('click', () => {
   document.querySelectorAll('.recipient-check').forEach((el) => { el.checked = false; });
   updateRecipientSummaryText(recipientCandidates.length);
 });
+selectAllIssuesBtn.addEventListener('click', () => {
+  document.querySelectorAll('.issue-check').forEach((el) => { el.checked = true; });
+  updateIssueSelectionMessage();
+});
+clearIssuesBtn.addEventListener('click', () => {
+  document.querySelectorAll('.issue-check').forEach((el) => { el.checked = false; });
+  updateIssueSelectionMessage();
+});
+downloadPdfBtn.addEventListener('click', () => {
+  downloadPeriodPdf();
+});
 rosterSearchBtn.addEventListener('click', async () => {
   rosterQueryMsg.textContent = '명부 조회 중...';
   rosterQueryMsg.className = 'msg';
@@ -533,12 +581,13 @@ loadSummaryBtn.addEventListener('click', async () => {
 });
 
 sendPeriodBtn.addEventListener('click', async () => {
+  const selectedIssues = getSelectedIssueIds().length;
   reportMsg.textContent = '기간 리포트 발송 중...';
   reportMsg.className = 'msg';
   try {
     const data = await sendPeriodReport();
     await loadReportLogs();
-    reportMsg.textContent = `발송 완료: ${data.period_type}:${data.period_value}, 뉴스 ${data.item_count}건, 이메일 ${data.email_recipients}명`;
+    reportMsg.textContent = `발송 완료: ${data.period_type}:${data.period_value}, 뉴스 ${data.item_count}건(선택 ${selectedIssues}건), 이메일 ${data.email_recipients}명`;
     reportMsg.className = 'msg success';
   } catch (err) {
     reportMsg.textContent = err.message;
@@ -547,12 +596,13 @@ sendPeriodBtn.addEventListener('click', async () => {
 });
 
 sendNowBtn.addEventListener('click', async () => {
+  const selectedIssues = getSelectedIssueIds().length;
   reportMsg.textContent = '현재월 기준 수시 즉시 발송 중...';
   reportMsg.className = 'msg';
   try {
     const data = await sendNowReport();
     await loadReportLogs();
-    reportMsg.textContent = `즉시 발송 완료: month:${monthNowKey()}, 뉴스 ${data.item_count}건, 이메일 ${data.email_recipients}명`;
+    reportMsg.textContent = `즉시 발송 완료: month:${monthNowKey()}, 뉴스 ${data.item_count}건(선택 ${selectedIssues}건), 이메일 ${data.email_recipients}명`;
     reportMsg.className = 'msg success';
   } catch (err) {
     reportMsg.textContent = err.message;
@@ -604,6 +654,7 @@ importCsvBtn.addEventListener('click', async () => {
 
 (async () => {
   collectMonthInput.value = monthNowKey();
+  updateIssueSelectionMessage();
   try {
     await loadEventOptions();
     await loadRecipientCandidates();
