@@ -326,6 +326,7 @@ async function collectLaborNewsForMonths(targetMonths) {
     const error = Array.isArray(result) ? null : result.error;
     fetched += items.length;
     let sourceInserted = 0;
+    const sourcePreview = [];
 
     for (const item of items) {
       const parsedMonth = monthKeyFromDate(item.published_at);
@@ -343,6 +344,12 @@ async function collectLaborNewsForMonths(targetMonths) {
         period_month: periodMonth,
         collected_at: collectedAt
       });
+      sourcePreview.push({
+        title: item.title,
+        link: item.link,
+        summary: item.summary || '',
+        published_at: item.published_at
+      });
       inserted += 1;
       sourceInserted += 1;
     }
@@ -352,11 +359,13 @@ async function collectLaborNewsForMonths(targetMonths) {
       category: source.category,
       fetched: items.length,
       inserted: sourceInserted,
+      items_preview: sourcePreview.slice(0, 20),
       error
     });
   }
 
   let lawInserted = 0;
+  const lawPreview = [];
   for (const lawName of KOREA_LAW_LINKS) {
     const link = `https://www.law.go.kr/lsSc.do?menuId=1&subMenuId=15&query=${encodeURIComponent(lawName)}#liBgcolor0`;
     const title = `대한민국법령정보: ${lawName}`;
@@ -375,6 +384,12 @@ async function collectLaborNewsForMonths(targetMonths) {
       period_month: representativeMonth,
       collected_at: collectedAt
     });
+    lawPreview.push({
+      title,
+      link,
+      summary: `대한민국법령정보센터에서 ${lawName} 관련 최신 조문/개정 정보를 확인할 수 있습니다.`,
+      published_at: collectedAt
+    });
     inserted += 1;
     lawInserted += 1;
   }
@@ -384,6 +399,7 @@ async function collectLaborNewsForMonths(targetMonths) {
     category: '고용노동부 소관 법령',
     fetched: KOREA_LAW_LINKS.length,
     inserted: lawInserted,
+    items_preview: lawPreview.slice(0, 20),
     error: null
   });
 

@@ -601,7 +601,24 @@ collectPeriodBtn.addEventListener('click', async () => {
 
     collectSourceStats.innerHTML = (data.source_stats || []).map((s) => {
       const status = s.error ? `실패: ${escapeHtml(s.error)}` : '정상';
-      return `<div class="report-item"><strong>[${escapeHtml(s.category)}] ${escapeHtml(s.source)}</strong><span>수집 ${s.fetched} / 저장 ${s.inserted} / ${status}</span></div>`;
+      const preview = (s.items_preview || []).map((it) => `
+        <div class="report-item">
+          <strong>${escapeHtml(it.title || '')}</strong>
+          <span>${escapeHtml(it.published_at || '-')}</span>
+          <span>${escapeHtml(it.summary || '요약 없음')}</span>
+          <a href="${escapeHtml(it.link || '#')}" target="_blank" rel="noopener">${escapeHtml(it.link || '')}</a>
+        </div>
+      `).join('');
+      return `
+        <div class="report-item">
+          <strong>[${escapeHtml(s.category)}] ${escapeHtml(s.source)}</strong>
+          <span>수집 ${s.fetched} / 저장 ${s.inserted} / ${status}</span>
+          <details>
+            <summary>세부 내용 보기</summary>
+            ${preview || '<span>해당 소스에서 새로 저장된 항목이 없습니다.</span>'}
+          </details>
+        </div>
+      `;
     }).join('');
   } catch (err) {
     reportMsg.textContent = err.message;
