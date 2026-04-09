@@ -4,9 +4,16 @@
     "api/index.js": {
       "runtime": "nodejs20.x",
       "includeFiles": "public/**"
+    },
+    "api/health.js": {
+      "runtime": "nodejs20.x"
     }
   },
   "routes": [
+    {
+      "src": "/api/healthz",
+      "dest": "/api/health.js"
+    },
     {
       "src": "/(.*)",
       "dest": "/api/index.js"

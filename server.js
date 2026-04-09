@@ -4,11 +4,11 @@ const express = require('express');
 const cors = require('cors');
 const axios = require('axios');
 const nodemailer = require('nodemailer');
-const cron = require('node-cron');
 const { XMLParser } = require('fast-xml-parser');
 
 const app = express();
 const IS_VERCEL = process.env.VERCEL === '1';
+const cron = IS_VERCEL ? null : require('node-cron');
 const PORT = process.env.PORT || 3000;
 const BASE_URL = process.env.BASE_URL || `http://localhost:${PORT}`;
 
@@ -383,7 +383,7 @@ async function sendPeriodReport(periodType, periodValue) {
   }
 }
 
-if (!IS_VERCEL && AUTO_REPORT_ENABLED) {
+if (!IS_VERCEL && AUTO_REPORT_ENABLED && cron) {
   cron.schedule(MONTHLY_REPORT_CRON, async () => {
     const targetMonth = previousMonthKey(new Date());
     await collectLaborNewsForMonth(targetMonth);
@@ -392,7 +392,7 @@ if (!IS_VERCEL && AUTO_REPORT_ENABLED) {
   }, { timezone: 'Asia/Seoul' });
 }
 
-if (!IS_VERCEL && FREQUENT_REPORT_ENABLED) {
+if (!IS_VERCEL && FREQUENT_REPORT_ENABLED && cron) {
   cron.schedule(FREQUENT_REPORT_CRON, async () => {
     const type = ['month', 'quarter', 'half', 'year'].includes(FREQUENT_REPORT_PERIOD_TYPE) ? FREQUENT_REPORT_PERIOD_TYPE : 'month';
     const month = monthKeyNow();
