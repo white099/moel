@@ -338,13 +338,15 @@ async function collectLaborNewsForMonths(targetMonths) {
         // Period filtering is intentionally relaxed to avoid missing labor references.
       }
 
+      const newsId = state.seq.news++;
       state.labor_news.push({
-        id: state.seq.news++,
+        id: newsId,
         ...item,
         period_month: periodMonth,
         collected_at: collectedAt
       });
       sourcePreview.push({
+        id: newsId,
         title: item.title,
         link: item.link,
         summary: item.summary || '',
@@ -372,8 +374,9 @@ async function collectLaborNewsForMonths(targetMonths) {
     const dup = state.labor_news.some((n) => n.title === title && n.link === link);
     if (dup) continue;
 
+    const lawId = state.seq.news++;
     state.labor_news.push({
-      id: state.seq.news++,
+      id: lawId,
       source_name: '대한민국법령정보',
       category: '고용노동부 소관 법령',
       field: inferField(lawName),
@@ -385,6 +388,7 @@ async function collectLaborNewsForMonths(targetMonths) {
       collected_at: collectedAt
     });
     lawPreview.push({
+      id: lawId,
       title,
       link,
       summary: `대한민국법령정보센터에서 ${lawName} 관련 최신 조문/개정 정보를 확인할 수 있습니다.`,
@@ -929,8 +933,9 @@ app.get('/api/reports/period-pdf', async (req, res) => {
 
   try {
     const pdfBuffer = await generateLaborReportPdfBuffer(items, label);
+    const preview = String(req.query.preview || '0') === '1';
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename=labor_report_${type}_${value}.pdf`);
+    res.setHeader('Content-Disposition', `${preview ? 'inline' : 'attachment'}; filename=labor_report_${type}_${value}.pdf`);
     return res.send(pdfBuffer);
   } catch (error) {
     return res.status(500).json({ message: String(error?.message || error) });

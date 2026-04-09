@@ -45,8 +45,12 @@ const collectSourceStats = document.getElementById('collectSourceStats');
 const reportPreview = document.getElementById('reportPreview');
 const selectAllIssuesBtn = document.getElementById('selectAllIssuesBtn');
 const clearIssuesBtn = document.getElementById('clearIssuesBtn');
+const applyIssueSelectionBtn = document.getElementById('applyIssueSelectionBtn');
+const previewPdfBtn = document.getElementById('previewPdfBtn');
 const downloadPdfBtn = document.getElementById('downloadPdfBtn');
 const issueSelectMsg = document.getElementById('issueSelectMsg');
+const pdfPreviewPanel = document.getElementById('pdfPreviewPanel');
+const pdfPreviewFrame = document.getElementById('pdfPreviewFrame');
 const loadLogsBtn = document.getElementById('loadLogsBtn');
 const reportLogsBody = document.getElementById('reportLogsBody');
 
@@ -178,9 +182,11 @@ function renderRecipientCandidates(items) {
 }
 
 function getSelectedIssueIds() {
-  return Array.from(document.querySelectorAll('.issue-check:checked'))
-    .map((el) => Number(el.value))
-    .filter((v) => Number.isFinite(v));
+  return [...new Set(
+    Array.from(document.querySelectorAll('.issue-check:checked'))
+      .map((el) => Number(el.value))
+      .filter((v) => Number.isFinite(v))
+  )];
 }
 
 function updateIssueSelectionMessage() {
@@ -455,12 +461,22 @@ async function loadReportLogs() {
 }
 
 function downloadPeriodPdf() {
+  window.open(buildPeriodPdfUrl(false), '_blank', 'noopener');
+}
+
+function buildPeriodPdfUrl(preview = false) {
   const type = periodType.value;
   const value = periodValue.value || currentPeriodValue(type);
   const issueIds = getSelectedIssueIds();
   const params = new URLSearchParams({ type, value });
   if (issueIds.length > 0) params.set('issue_ids', issueIds.join(','));
-  window.open(`/api/reports/period-pdf?${params.toString()}`, '_blank', 'noopener');
+  if (preview) params.set('preview', '1');
+  return `/api/reports/period-pdf?${params.toString()}`;
+}
+
+function previewPeriodPdf() {
+  pdfPreviewPanel.classList.remove('hidden');
+  pdfPreviewFrame.src = buildPeriodPdfUrl(true);
 }
 
 function printRoster() {
@@ -546,7 +562,18 @@ selectAllIssuesBtn.addEventListener('click', () => {
 });
 clearIssuesBtn.addEventListener('click', () => {
   document.querySelectorAll('.issue-check').forEach((el) => { el.checked = false; });
+  issueSelectMsg.textContent = '일부 선택 모드입니다. 필요한 이슈만 체크해 주세요.';
+  issueSelectMsg.className = 'msg';
   updateIssueSelectionMessage();
+});
+applyIssueSelectionBtn.addEventListener('click', () => {
+  const selected = getSelectedIssueIds().length;
+  issueSelectMsg.textContent = `선택 완료: ${selected}건 기준으로 PDF/발송에 반영됩니다.`;
+  issueSelectMsg.className = 'msg success';
+  previewPeriodPdf();
+});
+previewPdfBtn.addEventListener('click', () => {
+  previewPeriodPdf();
 });
 downloadPdfBtn.addEventListener('click', () => {
   downloadPeriodPdf();
@@ -603,7 +630,7 @@ collectPeriodBtn.addEventListener('click', async () => {
       const status = s.error ? `실패: ${escapeHtml(s.error)}` : '정상';
       const preview = (s.items_preview || []).map((it) => `
         <div class="report-item">
-          <strong>${escapeHtml(it.title || '')}</strong>
+          <label><input class="issue-check" type="checkbox" value="${Number(it.id)}" /> ${escapeHtml(it.title || '')}</label>
           <span>${escapeHtml(it.published_at || '-')}</span>
           <span>${escapeHtml(it.summary || '요약 없음')}</span>
           <a href="${escapeHtml(it.link || '#')}" target="_blank" rel="noopener">${escapeHtml(it.link || '')}</a>
@@ -620,6 +647,10 @@ collectPeriodBtn.addEventListener('click', async () => {
         </div>
       `;
     }).join('');
+    document.querySelectorAll('.issue-check').forEach((el) => {
+      el.addEventListener('change', updateIssueSelectionMessage);
+    });
+    updateIssueSelectionMessage();
   } catch (err) {
     reportMsg.textContent = err.message;
     reportMsg.className = 'msg error';
