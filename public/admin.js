@@ -408,7 +408,7 @@ async function loadPeriodSummary() {
   `).join('');
 
   if (!currentReportItems.length) {
-    reportPreview.innerHTML = '<p>해당 기간 수집 데이터가 없습니다. "선택 기간 신규 수집" 후 다시 조회해 주세요.</p>';
+    reportPreview.innerHTML = '<p>해당 기간 수집 데이터가 없습니다. "수집 정보 수집/조회" 후 다시 조회해 주세요.</p>';
   }
   bindIssueCheckboxes();
   updateIssueSelectionMessage();

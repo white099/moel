@@ -451,8 +451,16 @@ function pickIssues(items, issueIds) {
 }
 
 function buildPeriodItems(type, value, issueIds = []) {
+  const ids = parseIssueIds(issueIds);
+  if (ids.length > 0) {
+    const idSet = new Set(ids);
+    return state.labor_news
+      .filter((row) => idSet.has(Number(row.id)))
+      .sort((a, b) => new Date(b.published_at) - new Date(a.published_at));
+  }
+
   const items = listNewsByPeriod(type, value).sort((a, b) => new Date(b.published_at) - new Date(a.published_at));
-  return pickIssues(items, issueIds);
+  return items;
 }
 
 function buildReportSummaryLines(items, label) {
