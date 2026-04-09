@@ -201,6 +201,7 @@ function bindIssueCheckboxes() {
         if (other.value === targetValue) other.checked = checked;
       });
       updateIssueSelectionMessage();
+      refreshPdfPreviewIfVisible();
     });
   });
 }
@@ -385,13 +386,14 @@ async function loadPeriodSummary() {
   const data = await res.json();
   if (!res.ok) throw new Error(data.message || '기간 리포트 조회 실패');
 
+  const selectedSet = new Set(getSelectedIssueIds());
   currentReportItems = data.items || [];
   const grouped = groupIssuesByField(currentReportItems);
   reportPreview.innerHTML = grouped.map(([field, rows]) => `
     <div class="report-item">
       <strong>${escapeHtml(field)} (${rows.length}건)</strong>
       ${rows.map((item) => `
-        <label><input class="issue-check" type="checkbox" value="${Number(item.id)}" /> 이 이슈 선택</label>
+        <label><input class="issue-check" type="checkbox" value="${Number(item.id)}" ${selectedSet.has(Number(item.id)) ? 'checked' : ''} /> 이 이슈 선택</label>
         <details>
           <summary>${escapeHtml(item.title)}</summary>
           <div>출처: ${escapeHtml(item.source_name || '-')}</div>
@@ -479,12 +481,18 @@ function buildPeriodPdfUrl(preview = false) {
   const params = new URLSearchParams({ type, value });
   if (issueIds.length > 0) params.set('issue_ids', issueIds.join(','));
   if (preview) params.set('preview', '1');
+  if (preview) params.set('_ts', String(Date.now()));
   return `/api/reports/period-pdf?${params.toString()}`;
+}
+
+function refreshPdfPreviewIfVisible() {
+  if (pdfPreviewPanel.classList.contains('hidden')) return;
+  pdfPreviewFrame.src = buildPeriodPdfUrl(true);
 }
 
 function previewPeriodPdf() {
   pdfPreviewPanel.classList.remove('hidden');
-  pdfPreviewFrame.src = buildPeriodPdfUrl(true);
+  refreshPdfPreviewIfVisible();
 }
 
 function printRoster() {
@@ -610,6 +618,7 @@ collectPeriodBtn.addEventListener('click', async () => {
   reportMsg.textContent = '선택 기간 수집/조회 중...';
   reportMsg.className = 'msg';
   try {
+    const selectedSet = new Set(getSelectedIssueIds());
     const data = await collectPeriodNews();
     await loadAvailablePeriods();
     await loadPeriodSummary();
@@ -621,7 +630,7 @@ collectPeriodBtn.addEventListener('click', async () => {
     collectSourceStats.innerHTML = (data.source_stats || []).map((s) => {
       const status = s.error ? `실패: ${escapeHtml(s.error)}` : '정상';
       const preview = (s.items_preview || []).map((it) => `
-        <label><input class="issue-check" type="checkbox" value="${Number(it.id)}" /> 이 이슈 선택</label>
+        <label><input class="issue-check" type="checkbox" value="${Number(it.id)}" ${selectedSet.has(Number(it.id)) ? 'checked' : ''} /> 이 이슈 선택</label>
         <details class="report-item">
           <summary>${escapeHtml(it.title || '')}</summary>
           <span>${escapeHtml(it.published_at || '-')}</span>
