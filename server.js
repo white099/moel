@@ -348,9 +348,27 @@ async function sendEmailReport(recipients, subject, textBody, htmlBody) {
   return { sent: recipients.length, skipped: false };
 }
 
-async function sendPeriodReport(type, value) {
+function selectRecipientEmails(selectedEmails = []) {
+  const allConsentEmails = [...new Set(
+    state.attendees
+      .filter((a) => a.consent === 1)
+      .map((a) => String(a.email || '').trim().toLowerCase())
+      .filter(Boolean)
+  )];
+
+  if (!Array.isArray(selectedEmails) || selectedEmails.length === 0) return allConsentEmails;
+
+  const selected = new Set(
+    selectedEmails
+      .map((e) => String(e || '').trim().toLowerCase())
+      .filter(isValidEmail)
+  );
+  return allConsentEmails.filter((email) => selected.has(email));
+}
+
+async function sendPeriodReport(type, value, selectedEmails = []) {
   const items = listNewsByPeriod(type, value);
-  const emails = [...new Set(state.attendees.filter((a) => a.consent === 1).map((a) => String(a.email || '').trim().toLowerCase()).filter(Boolean))];
+  const emails = selectRecipientEmails(selectedEmails);
 
   const label = `${type}:${value}`;
   const subject = `[MOEL] ${label} report`;
@@ -368,7 +386,7 @@ async function sendPeriodReport(type, value) {
       recipient_phone_count: 0,
       item_count: items.length,
       status,
-      detail: JSON.stringify({ type, value, emailResult })
+      detail: JSON.stringify({ type, value, selected_count: selectedEmails.length, emailResult })
     });
     saveState();
 
@@ -590,6 +608,57 @@ app.get('/api/rosters', (req, res) => {
   });
 });
 
+app.get('/api/recipients', (req, res) => {
+  const meetingDate = requiredString(req.query.meeting_date) ? String(req.query.meeting_date).trim() : null;
+  const eventId = requiredString(req.query.event_id) ? String(req.query.event_id).trim() : null;
+
+  const eventMap = new Map(state.events.map((e) => [e.id, e]));
+  const filteredEventIds = new Set(
+    state.events
+      .filter((e) => (!meetingDate || e.meeting_date === meetingDate) && (!eventId || e.id === eventId))
+      .map((e) => e.id)
+  );
+
+  const byEmail = new Map();
+  for (const attendee of state.attendees) {
+    if (attendee.consent !== 1) continue;
+    if (!filteredEventIds.has(attendee.event_id)) continue;
+
+    const email = String(attendee.email || '').trim().toLowerCase();
+    if (!isValidEmail(email)) continue;
+
+    const event = eventMap.get(attendee.event_id);
+    const eventTitle = event ? event.title : '';
+    const eventDate = event ? event.meeting_date : '';
+    const label = eventDate ? `${eventDate} | ${eventTitle}` : eventTitle;
+
+    if (!byEmail.has(email)) {
+      byEmail.set(email, {
+        email,
+        name: attendee.name || '',
+        phone: attendee.phone || '',
+        workplace: attendee.workplace || '',
+        position: attendee.position || '',
+        events: new Set([label])
+      });
+      continue;
+    }
+
+    const prev = byEmail.get(email);
+    prev.events.add(label);
+  }
+
+  const items = Array.from(byEmail.values())
+    .map((x) => ({ ...x, events: Array.from(x.events).filter(Boolean).sort() }))
+    .sort((a, b) => (a.name || '').localeCompare(b.name || '', 'ko'));
+
+  res.json({
+    filters: { meeting_date: meetingDate, event_id: eventId },
+    count: items.length,
+    items
+  });
+});
+
 app.post('/api/news/collect-monthly', async (req, res) => {
   const month = req.body?.month || monthKeyNow();
   const result = await collectLaborNewsForMonth(month);
@@ -622,17 +691,19 @@ app.get('/api/reports/available-periods', (_, res) => {
 app.post('/api/reports/send-period', async (req, res) => {
   const type = String(req.body?.type || 'month');
   const value = String(req.body?.value || previousMonthKey(new Date()));
+  const recipientEmails = Array.isArray(req.body?.recipient_emails) ? req.body.recipient_emails : [];
   if (!['month', 'quarter', 'half', 'year'].includes(type)) {
     return res.status(400).json({ message: 'Invalid type.' });
   }
-  const result = await sendPeriodReport(type, value);
+  const result = await sendPeriodReport(type, value, recipientEmails);
   res.json(result);
 });
 
-app.post('/api/reports/send-now', async (_, res) => {
+app.post('/api/reports/send-now', async (req, res) => {
   const month = monthKeyNow();
+  const recipientEmails = Array.isArray(req.body?.recipient_emails) ? req.body.recipient_emails : [];
   await collectLaborNewsForMonth(month);
-  const result = await sendPeriodReport('month', month);
+  const result = await sendPeriodReport('month', month, recipientEmails);
   res.json(result);
 });
 

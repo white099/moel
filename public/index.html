@@ -137,9 +137,31 @@
         </label>
         <div class="inline-actions">
           <button id="loadSummaryBtn">기간 리포트 조회</button>
+          <button id="toggleRecipientsBtn" type="button">발송 대상 선택</button>
           <button id="sendPeriodBtn">선택 기간 발송</button>
           <button id="sendNowBtn">수시 즉시 발송(현재월)</button>
         </div>
+      </div>
+      <div id="recipientPanel" class="report-box hidden">
+        <div class="grid-3">
+          <label>
+            대상 회의일자
+            <input id="recipientFilterDate" type="date" />
+          </label>
+          <label>
+            대상 회의
+            <select id="recipientFilterEvent">
+              <option value="">전체 회의</option>
+            </select>
+          </label>
+          <div class="inline-actions">
+            <button id="loadRecipientsBtn" type="button">대상 불러오기</button>
+            <button id="selectAllRecipientsBtn" type="button">전체 선택</button>
+            <button id="clearRecipientsBtn" type="button">선택 해제</button>
+          </div>
+        </div>
+        <p id="recipientSummary" class="msg"></p>
+        <div id="recipientList" class="chips"></div>
       </div>
 
       <p id="reportMsg" class="msg"></p>

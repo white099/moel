@@ -33,6 +33,15 @@ const periodValue = document.getElementById('periodValue');
 const loadSummaryBtn = document.getElementById('loadSummaryBtn');
 const sendPeriodBtn = document.getElementById('sendPeriodBtn');
 const sendNowBtn = document.getElementById('sendNowBtn');
+const toggleRecipientsBtn = document.getElementById('toggleRecipientsBtn');
+const recipientPanel = document.getElementById('recipientPanel');
+const recipientFilterDate = document.getElementById('recipientFilterDate');
+const recipientFilterEvent = document.getElementById('recipientFilterEvent');
+const loadRecipientsBtn = document.getElementById('loadRecipientsBtn');
+const selectAllRecipientsBtn = document.getElementById('selectAllRecipientsBtn');
+const clearRecipientsBtn = document.getElementById('clearRecipientsBtn');
+const recipientSummary = document.getElementById('recipientSummary');
+const recipientList = document.getElementById('recipientList');
 const reportMsg = document.getElementById('reportMsg');
 const collectSourceStats = document.getElementById('collectSourceStats');
 const categorySummary = document.getElementById('categorySummary');
@@ -44,6 +53,7 @@ const reportLogsBody = document.getElementById('reportLogsBody');
 let currentEventId = null;
 let currentEventTitle = '';
 let currentEventDate = '';
+let recipientCandidates = [];
 
 const portalUrl = `${window.location.origin}/portal.html`;
 
@@ -95,16 +105,66 @@ function eventLabel(event) {
   return event.title;
 }
 
+function renderEventSelect(selectEl, events, selectedId = '') {
+  const options = ['<option value="">전체 회의</option>']
+    .concat(events.map((ev) => `<option value="${escapeHtml(ev.id)}">${escapeHtml(eventLabel(ev))}</option>`));
+  selectEl.innerHTML = options.join('');
+  if (selectedId) selectEl.value = selectedId;
+}
+
 async function loadEventOptions(selectedId = '') {
   const res = await fetch('/api/events');
   const data = await res.json();
   if (!res.ok) throw new Error(data.message || '회의 목록 조회 실패');
 
-  const options = ['<option value="">전체 회의</option>']
-    .concat((data.items || []).map((ev) => `<option value="${escapeHtml(ev.id)}">${escapeHtml(eventLabel(ev))}</option>`));
-  rosterFilterEvent.innerHTML = options.join('');
+  const events = data.items || [];
+  renderEventSelect(rosterFilterEvent, events, selectedId);
+  renderEventSelect(recipientFilterEvent, events, selectedId);
+}
 
-  if (selectedId) rosterFilterEvent.value = selectedId;
+function getSelectedRecipientEmails() {
+  return Array.from(document.querySelectorAll('.recipient-check:checked'))
+    .map((el) => el.value)
+    .filter(Boolean);
+}
+
+function updateRecipientSummaryText(total) {
+  const selected = getSelectedRecipientEmails().length;
+  recipientSummary.textContent = `대상 ${total}명 중 ${selected}명 선택`;
+  recipientSummary.className = 'msg';
+}
+
+function renderRecipientCandidates(items) {
+  recipientCandidates = items || [];
+  recipientList.innerHTML = recipientCandidates.map((it) => `
+    <label class="chip">
+      <input class="recipient-check" type="checkbox" value="${escapeHtml(it.email)}" />
+      ${escapeHtml(it.name || '이름없음')} (${escapeHtml(it.email)})
+    </label>
+  `).join('');
+
+  if (!recipientCandidates.length) {
+    recipientList.innerHTML = '<span class="chip">대상자가 없습니다.</span>';
+  }
+
+  document.querySelectorAll('.recipient-check').forEach((el) => {
+    el.addEventListener('change', () => updateRecipientSummaryText(recipientCandidates.length));
+  });
+  updateRecipientSummaryText(recipientCandidates.length);
+}
+
+async function loadRecipientCandidates() {
+  const params = new URLSearchParams();
+  if (recipientFilterDate.value) params.set('meeting_date', recipientFilterDate.value);
+  if (recipientFilterEvent.value) params.set('event_id', recipientFilterEvent.value);
+
+  const query = params.toString();
+  const url = query ? `/api/recipients?${query}` : '/api/recipients';
+  const res = await fetch(url);
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.message || '발송 대상 조회 실패');
+  renderRecipientCandidates(data.items || []);
+  return data;
 }
 
 async function queryRosters() {
@@ -279,9 +339,11 @@ async function loadPeriodSummary() {
 }
 
 async function sendPeriodReport() {
+  const recipientEmails = getSelectedRecipientEmails();
   const payload = {
     type: periodType.value,
-    value: periodValue.value
+    value: periodValue.value,
+    recipient_emails: recipientEmails
   };
 
   const res = await fetch('/api/reports/send-period', {
@@ -296,7 +358,12 @@ async function sendPeriodReport() {
 }
 
 async function sendNowReport() {
-  const res = await fetch('/api/reports/send-now', { method: 'POST' });
+  const payload = { recipient_emails: getSelectedRecipientEmails() };
+  const res = await fetch('/api/reports/send-now', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
   const data = await res.json();
   if (!res.ok) throw new Error(data.message || '수시 즉시 발송 실패');
   return data;
@@ -362,6 +429,38 @@ copyEventPortalBtn.addEventListener('click', async () => {
 });
 jumpToQrBtn.addEventListener('click', () => {
   eventPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+});
+toggleRecipientsBtn.addEventListener('click', async () => {
+  recipientPanel.classList.toggle('hidden');
+  if (!recipientPanel.classList.contains('hidden')) {
+    try {
+      await loadRecipientCandidates();
+    } catch (err) {
+      recipientSummary.textContent = err.message;
+      recipientSummary.className = 'msg error';
+    }
+  }
+});
+loadRecipientsBtn.addEventListener('click', async () => {
+  recipientSummary.textContent = '발송 대상 조회 중...';
+  recipientSummary.className = 'msg';
+  try {
+    const data = await loadRecipientCandidates();
+    recipientSummary.textContent = `발송 대상 ${data.count}명을 불러왔습니다.`;
+    recipientSummary.className = 'msg success';
+    updateRecipientSummaryText(data.count);
+  } catch (err) {
+    recipientSummary.textContent = err.message;
+    recipientSummary.className = 'msg error';
+  }
+});
+selectAllRecipientsBtn.addEventListener('click', () => {
+  document.querySelectorAll('.recipient-check').forEach((el) => { el.checked = true; });
+  updateRecipientSummaryText(recipientCandidates.length);
+});
+clearRecipientsBtn.addEventListener('click', () => {
+  document.querySelectorAll('.recipient-check').forEach((el) => { el.checked = false; });
+  updateRecipientSummaryText(recipientCandidates.length);
 });
 rosterSearchBtn.addEventListener('click', async () => {
   rosterQueryMsg.textContent = '명부 조회 중...';
@@ -507,6 +606,7 @@ importCsvBtn.addEventListener('click', async () => {
   collectMonthInput.value = monthNowKey();
   try {
     await loadEventOptions();
+    await loadRecipientCandidates();
     await queryRosters();
     await loadAvailablePeriods();
   } catch {
