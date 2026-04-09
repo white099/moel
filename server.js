@@ -14,6 +14,8 @@ const BASE_URL = process.env.BASE_URL || '';
 
 const DATA_PATH = IS_VERCEL ? '/tmp/data.json' : path.join(__dirname, 'data.json');
 const PUBLIC_DIR = path.join(__dirname, 'public');
+const FONT_REGULAR_PATH = path.join(__dirname, 'assets', 'fonts', 'malgun.ttf');
+const FONT_BOLD_PATH = path.join(__dirname, 'assets', 'fonts', 'malgunbd.ttf');
 
 const MAIL_PROVIDER = (process.env.MAIL_PROVIDER || 'korea').toLowerCase();
 const smtpDefaults = MAIL_PROVIDER === 'korea'
@@ -472,6 +474,21 @@ function buildReportSummaryLines(items, label) {
   return lines;
 }
 
+function applyPdfKoreanFont(doc, bold = false) {
+  try {
+    if (fs.existsSync(FONT_REGULAR_PATH)) {
+      doc.registerFont('KoreanRegular', FONT_REGULAR_PATH);
+      doc.font('KoreanRegular');
+    }
+    if (bold && fs.existsSync(FONT_BOLD_PATH)) {
+      doc.registerFont('KoreanBold', FONT_BOLD_PATH);
+      doc.font('KoreanBold');
+    }
+  } catch {
+    // Fall back to built-in font if custom font registration fails.
+  }
+}
+
 function generateLaborReportPdfBuffer(items, label) {
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({ size: 'A4', margin: 50 });
@@ -480,15 +497,19 @@ function generateLaborReportPdfBuffer(items, label) {
     doc.on('end', () => resolve(Buffer.concat(chunks)));
     doc.on('error', reject);
 
+    applyPdfKoreanFont(doc, true);
     doc.fontSize(20).text('노동 이슈 리포트', { align: 'left' });
     doc.moveDown(0.5);
+    applyPdfKoreanFont(doc, false);
     doc.fontSize(12);
     const summaryLines = buildReportSummaryLines(items, label);
     summaryLines.forEach((line) => doc.text(line));
 
     doc.addPage();
+    applyPdfKoreanFont(doc, true);
     doc.fontSize(16).text('상세 이슈 목록', { align: 'left' });
     doc.moveDown(0.5);
+    applyPdfKoreanFont(doc, false);
     doc.fontSize(10);
     if (items.length === 0) {
       doc.text('선택된 이슈가 없습니다.');
