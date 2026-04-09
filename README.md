@@ -50,6 +50,12 @@ npm start
 - `FREQUENT_REPORT_PERIOD_TYPE` (`month|quarter|half|year`, 기본 `month`)
 - `MAIL_PROVIDER` (`korea` 기본)
 
+### Vercel 배포 참고
+- `vercel.json`으로 서버리스 엔트리를 `api/index.js`로 지정했습니다.
+- Vercel에서는 DB를 `/tmp/attendance.db`로 사용합니다(서버리스 특성상 영구 저장 아님).
+- Vercel 기본값에서는 자동 스케줄을 끄도록 설정되어 있습니다.
+  - 필요 시 `AUTO_REPORT_ENABLED=true`, `FREQUENT_REPORT_ENABLED=true`를 직접 지정하세요.
+
 ### 이메일 SMTP
 - 코리아 메일 기본값: `smtp.korea.com:465`, SSL(`SMTP_SECURE=true`)
 - `SMTP_HOST` (미설정 시 `MAIL_PROVIDER=korea` 기본값 사용)

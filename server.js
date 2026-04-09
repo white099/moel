@@ -9,13 +9,14 @@ const cron = require('node-cron');
 const { XMLParser } = require('fast-xml-parser');
 
 const app = express();
+const IS_VERCEL = process.env.VERCEL === '1';
 const PORT = process.env.PORT || 3000;
 const BASE_URL = process.env.BASE_URL || `http://localhost:${PORT}`;
 
 const MONTHLY_REPORT_CRON = process.env.MONTHLY_REPORT_CRON || '0 9 1 * *';
 const FREQUENT_REPORT_CRON = process.env.FREQUENT_REPORT_CRON || '0 */6 * * *';
-const AUTO_REPORT_ENABLED = (process.env.AUTO_REPORT_ENABLED || 'true').toLowerCase() === 'true';
-const FREQUENT_REPORT_ENABLED = (process.env.FREQUENT_REPORT_ENABLED || 'true').toLowerCase() === 'true';
+const AUTO_REPORT_ENABLED = (process.env.AUTO_REPORT_ENABLED || (IS_VERCEL ? 'false' : 'true')).toLowerCase() === 'true';
+const FREQUENT_REPORT_ENABLED = (process.env.FREQUENT_REPORT_ENABLED || (IS_VERCEL ? 'false' : 'true')).toLowerCase() === 'true';
 const FREQUENT_REPORT_PERIOD_TYPE = process.env.FREQUENT_REPORT_PERIOD_TYPE || 'month';
 
 const MAIL_PROVIDER = (process.env.MAIL_PROVIDER || 'korea').toLowerCase();
@@ -29,7 +30,8 @@ const SMTP_USER = process.env.SMTP_USER || '';
 const SMTP_PASS = process.env.SMTP_PASS || '';
 const SMTP_FROM = process.env.SMTP_FROM || SMTP_USER || 'no-reply@example.com';
 
-const db = new Database(path.join(__dirname, 'attendance.db'));
+const DB_PATH = IS_VERCEL ? '/tmp/attendance.db' : path.join(__dirname, 'attendance.db');
+const db = new Database(DB_PATH);
 
 const RSS_SOURCES = [
   { source_name: '고용노동부', category: '법령 개정사항', url: 'https://www.moel.go.kr/rss/release/law.xml' },
@@ -179,7 +181,8 @@ const listReportLogs = db.prepare(`
 
 app.use(cors());
 app.use(express.json());
-app.use(express.static(path.join(__dirname, 'public')));
+const PUBLIC_DIR = path.join(__dirname, 'public');
+app.use(express.static(PUBLIC_DIR));
 
 function requiredString(value) {
   return typeof value === 'string' && value.trim().length > 0;
@@ -491,7 +494,16 @@ if (FREQUENT_REPORT_ENABLED) {
 }
 
 app.get('/api/health', (_, res) => {
-  res.json({ status: 'ok', time: new Date().toISOString() });
+  res.json({
+    status: 'ok',
+    time: new Date().toISOString(),
+    runtime: IS_VERCEL ? 'vercel-serverless' : 'node-server',
+    db_path: DB_PATH
+  });
+});
+
+app.get('/', (_, res) => {
+  return res.sendFile(path.join(PUBLIC_DIR, 'index.html'));
 });
 
 app.get('/api/events', (_, res) => {
@@ -652,9 +664,13 @@ app.get('/api/reports/logs', (_, res) => {
   res.json({ items: listReportLogs.all() });
 });
 
-app.listen(PORT, () => {
-  console.log(`Server running on ${BASE_URL}`);
-  console.log(`MAIL_PROVIDER=${MAIL_PROVIDER} SMTP_HOST=${SMTP_HOST} SMTP_PORT=${SMTP_PORT} SMTP_SECURE=${SMTP_SECURE}`);
-  console.log(`AUTO_REPORT_ENABLED=${AUTO_REPORT_ENABLED} MONTHLY_REPORT_CRON=${MONTHLY_REPORT_CRON}`);
-  console.log(`FREQUENT_REPORT_ENABLED=${FREQUENT_REPORT_ENABLED} FREQUENT_REPORT_CRON=${FREQUENT_REPORT_CRON} FREQUENT_REPORT_PERIOD_TYPE=${FREQUENT_REPORT_PERIOD_TYPE}`);
-});
+if (!IS_VERCEL) {
+  app.listen(PORT, () => {
+    console.log(`Server running on ${BASE_URL}`);
+    console.log(`MAIL_PROVIDER=${MAIL_PROVIDER} SMTP_HOST=${SMTP_HOST} SMTP_PORT=${SMTP_PORT} SMTP_SECURE=${SMTP_SECURE}`);
+    console.log(`AUTO_REPORT_ENABLED=${AUTO_REPORT_ENABLED} MONTHLY_REPORT_CRON=${MONTHLY_REPORT_CRON}`);
+    console.log(`FREQUENT_REPORT_ENABLED=${FREQUENT_REPORT_ENABLED} FREQUENT_REPORT_CRON=${FREQUENT_REPORT_CRON} FREQUENT_REPORT_PERIOD_TYPE=${FREQUENT_REPORT_PERIOD_TYPE}`);
+  });
+}
+
+module.exports = app;
