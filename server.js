@@ -167,6 +167,11 @@ function yearKey(monthKey) {
 }
 
 function monthsFromPeriod(type, value) {
+  if (type === 'month') {
+    const match = String(value).match(/^(\d{4})-(\d{2})$/);
+    if (!match) return [];
+    return [String(value)];
+  }
   if (type === 'quarter') {
     const match = String(value).match(/^(\d{4})-Q([1-4])$/);
     if (!match) return [];
@@ -839,9 +844,9 @@ app.get('/api/recipients', (req, res) => {
 });
 
 app.post('/api/news/collect-period', async (req, res) => {
-  const type = String(req.body?.type || 'quarter');
-  const value = String(req.body?.value || quarterNowKey());
-  if (!['quarter', 'half', 'year'].includes(type)) {
+  const type = String(req.body?.type || 'month');
+  const value = String(req.body?.value || monthKeyNow());
+  if (!['month', 'quarter', 'half', 'year'].includes(type)) {
     return res.status(400).json({ message: 'Invalid type.' });
   }
   const months = monthsFromPeriod(type, value);
@@ -851,10 +856,10 @@ app.post('/api/news/collect-period', async (req, res) => {
 });
 
 app.get('/api/reports/period', (req, res) => {
-  const type = String(req.query.type || 'quarter');
-  const value = String(req.query.value || quarterNowKey());
+  const type = String(req.query.type || 'month');
+  const value = String(req.query.value || monthKeyNow());
 
-  if (!['quarter', 'half', 'year'].includes(type)) {
+  if (!['month', 'quarter', 'half', 'year'].includes(type)) {
     return res.status(400).json({ message: 'Invalid type.' });
   }
 
@@ -871,9 +876,9 @@ app.get('/api/reports/period', (req, res) => {
 });
 
 app.get('/api/reports/period-pdf', async (req, res) => {
-  const type = String(req.query.type || 'quarter');
-  const value = String(req.query.value || quarterNowKey());
-  if (!['quarter', 'half', 'year'].includes(type)) {
+  const type = String(req.query.type || 'month');
+  const value = String(req.query.value || monthKeyNow());
+  if (!['month', 'quarter', 'half', 'year'].includes(type)) {
     return res.status(400).json({ message: 'Invalid type.' });
   }
 
@@ -938,11 +943,11 @@ app.get('/api/reports/available-periods', (_, res) => {
 });
 
 app.post('/api/reports/send-period', async (req, res) => {
-  const type = String(req.body?.type || 'quarter');
-  const value = String(req.body?.value || quarterNowKey());
+  const type = String(req.body?.type || 'month');
+  const value = String(req.body?.value || monthKeyNow());
   const recipientEmails = Array.isArray(req.body?.recipient_emails) ? req.body.recipient_emails : [];
   const issueIds = Array.isArray(req.body?.issue_ids) ? req.body.issue_ids : [];
-  if (!['quarter', 'half', 'year'].includes(type)) {
+  if (!['month', 'quarter', 'half', 'year'].includes(type)) {
     return res.status(400).json({ message: 'Invalid type.' });
   }
   const result = await sendPeriodReport(type, value, recipientEmails, issueIds);

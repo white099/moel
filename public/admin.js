@@ -43,7 +43,6 @@ const recipientSummary = document.getElementById('recipientSummary');
 const recipientList = document.getElementById('recipientList');
 const reportMsg = document.getElementById('reportMsg');
 const collectSourceStats = document.getElementById('collectSourceStats');
-const fieldSummary = document.getElementById('fieldSummary');
 const reportPreview = document.getElementById('reportPreview');
 const selectAllIssuesBtn = document.getElementById('selectAllIssuesBtn');
 const clearIssuesBtn = document.getElementById('clearIssuesBtn');
@@ -88,6 +87,12 @@ function yearNowKey() {
 }
 
 function currentPeriodValue(type) {
+  if (type === 'month') {
+    const d = new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    return `${y}-${m}`;
+  }
   if (type === 'quarter') return quarterNowKey();
   if (type === 'half') return halfNowKey();
   return yearNowKey();
@@ -324,7 +329,8 @@ async function loadAvailablePeriods() {
   if (!res.ok) throw new Error(data.message || '기간 목록 조회 실패');
 
   const type = periodType.value;
-  const values = type === 'quarter' ? data.quarters
+  const values = type === 'month' ? data.months
+    : type === 'quarter' ? data.quarters
     : type === 'half' ? data.halves
     : data.years;
 
@@ -365,15 +371,20 @@ async function loadPeriodSummary() {
   if (!res.ok) throw new Error(data.message || '기간 리포트 조회 실패');
 
   currentReportItems = data.items || [];
-  renderChips(fieldSummary, data.by_field || []);
   const grouped = groupIssuesByField(currentReportItems);
   reportPreview.innerHTML = grouped.map(([field, rows]) => `
     <div class="report-item">
       <strong>${escapeHtml(field)} (${rows.length}건)</strong>
       ${rows.map((item) => `
         <label><input class="issue-check" type="checkbox" value="${Number(item.id)}" /> ${escapeHtml(item.title)}</label>
-        <a href="${escapeHtml(item.link || '#')}" target="_blank" rel="noopener">${escapeHtml(item.link || '')}</a>
-        <span>${escapeHtml(item.published_at)}</span>
+        <details>
+          <summary>세부 내용 보기</summary>
+          <div>출처: ${escapeHtml(item.source_name || '-')}</div>
+          <div>카테고리: ${escapeHtml(item.category || '-')}</div>
+          <div>분야: ${escapeHtml(item.field || '-')}</div>
+          <div>발행일: ${escapeHtml(item.published_at || '-')}</div>
+          <div><a href="${escapeHtml(item.link || '#')}" target="_blank" rel="noopener">${escapeHtml(item.link || '')}</a></div>
+        </details>
       `).join('')}
     </div>
   `).join('');
