@@ -1,0 +1,36 @@
+﻿<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>회의 QR 접속 포털</title>
+  <link rel="stylesheet" href="/style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js"></script>
+</head>
+<body>
+  <main class="container">
+    <h1>회의 QR 접속 포털</h1>
+    <p>참석할 회의를 선택하면 QR과 접속 링크가 표시됩니다.</p>
+
+    <section class="card">
+      <div class="grid-2">
+        <label>
+          회의 선택
+          <select id="eventSelect"></select>
+        </label>
+        <div class="inline-actions">
+          <button id="refreshEventsBtn">회의 목록 새로고침</button>
+        </div>
+      </div>
+      <p id="portalInfo" class="msg"></p>
+    </section>
+
+    <section class="card">
+      <h2>QR 코드</h2>
+      <canvas id="portalQr"></canvas>
+      <p><a id="portalCheckinLink" target="_blank" rel="noopener"></a></p>
+    </section>
+  </main>
+  <script src="/portal.js"></script>
+</body>
+</html>

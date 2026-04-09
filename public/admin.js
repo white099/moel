@@ -1,13 +1,18 @@
 ﻿const createForm = document.getElementById('createEventForm');
 const createMsg = document.getElementById('createMsg');
+const portalLink = document.getElementById('portalLink');
+const copyPortalBtn = document.getElementById('copyPortalBtn');
+const portalMsg = document.getElementById('portalMsg');
 const eventPanel = document.getElementById('eventPanel');
 const rosterPanel = document.getElementById('rosterPanel');
 const eventInfo = document.getElementById('eventInfo');
 const checkinLink = document.getElementById('checkinLink');
+const eventPortalLink = document.getElementById('eventPortalLink');
 const rosterBody = document.getElementById('rosterBody');
 const rosterCount = document.getElementById('rosterCount');
 const refreshBtn = document.getElementById('refreshBtn');
 const printBtn = document.getElementById('printBtn');
+const copyEventPortalBtn = document.getElementById('copyEventPortalBtn');
 const downloadCsv = document.getElementById('downloadCsv');
 
 const collectMonthInput = document.getElementById('collectMonthInput');
@@ -28,6 +33,8 @@ let currentEventId = null;
 let currentEventTitle = '';
 let currentEventDate = '';
 
+const portalUrl = `${window.location.origin}/portal.html`;
+
 function escapeHtml(value) {
   return String(value)
     .replaceAll('&', '&amp;')
@@ -47,6 +54,17 @@ function monthNowKey() {
 function renderChips(container, items) {
   container.innerHTML = items.map((it) => `<span class="chip">${escapeHtml(it.name)} ${it.count}건</span>`).join('');
   if (!items.length) container.innerHTML = '<span class="chip">데이터 없음</span>';
+}
+
+async function copyText(text, msgEl, okMessage) {
+  try {
+    await navigator.clipboard.writeText(text);
+    msgEl.textContent = okMessage;
+    msgEl.className = 'msg success';
+  } catch {
+    msgEl.textContent = '복사에 실패했습니다. 직접 선택해서 복사해 주세요.';
+    msgEl.className = 'msg error';
+  }
 }
 
 async function createEvent(payload) {
@@ -90,6 +108,8 @@ async function renderEvent(event) {
   eventInfo.textContent = `회의: ${title}`;
   checkinLink.href = event.checkin_url;
   checkinLink.textContent = event.checkin_url;
+  eventPortalLink.href = `${portalUrl}?event=${encodeURIComponent(event.id)}`;
+  eventPortalLink.textContent = `이 회의 QR페이지: ${eventPortalLink.href}`;
   downloadCsv.href = `/api/events/${event.id}/attendees.csv`;
 
   await QRCode.toCanvas(document.getElementById('qrcode'), event.checkin_url, {
@@ -225,6 +245,13 @@ refreshBtn.addEventListener('click', async () => {
 });
 
 printBtn.addEventListener('click', printRoster);
+copyPortalBtn.addEventListener('click', async () => {
+  await copyText(portalUrl, portalMsg, '포털 링크를 복사했습니다.');
+});
+copyEventPortalBtn.addEventListener('click', async () => {
+  if (!currentEventId) return;
+  await copyText(`${portalUrl}?event=${encodeURIComponent(currentEventId)}`, portalMsg, '이 회의 QR페이지 링크를 복사했습니다.');
+});
 
 periodType.addEventListener('change', async () => {
   try {
@@ -304,6 +331,8 @@ loadLogsBtn.addEventListener('click', async () => {
 });
 
 (async () => {
+  portalLink.href = portalUrl;
+  portalLink.textContent = portalUrl;
   collectMonthInput.value = monthNowKey();
   try {
     await loadAvailablePeriods();

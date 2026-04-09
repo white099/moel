@@ -10,6 +10,15 @@
 <body>
   <main class="container">
     <h1>회의 참석자 명부 관리자</h1>
+    <section class="card">
+      <h2>QR 접속 페이지 노출</h2>
+      <p>아래 페이지를 공유하면 참석자가 회의를 선택해 QR로 바로 접속할 수 있습니다.</p>
+      <p><a id="portalLink" target="_blank" rel="noopener"></a></p>
+      <div class="row">
+        <button id="copyPortalBtn">포털 링크 복사</button>
+      </div>
+      <p class="msg" id="portalMsg"></p>
+    </section>
 
     <section class="card">
       <h2>회의 생성</h2>
@@ -32,9 +41,11 @@
       <p id="eventInfo"></p>
       <canvas id="qrcode"></canvas>
       <p><a id="checkinLink" target="_blank" rel="noopener"></a></p>
+      <p><a id="eventPortalLink" target="_blank" rel="noopener"></a></p>
       <div class="row">
         <button id="refreshBtn">명부 새로고침</button>
         <button id="printBtn">명부 출력</button>
+        <button id="copyEventPortalBtn">이 회의 QR페이지 복사</button>
         <a id="downloadCsv" class="btn" href="#">CSV 다운로드</a>
       </div>
     </section>
