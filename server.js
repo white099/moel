@@ -1,8 +1,7 @@
-﻿const fs = require('fs');
+const fs = require('fs');
 const path = require('path');
 const express = require('express');
 const cors = require('cors');
-const { nanoid } = require('nanoid');
 const axios = require('axios');
 const nodemailer = require('nodemailer');
 const cron = require('node-cron');
@@ -60,6 +59,10 @@ const FIELD_KEYWORDS = {
   '비정규/차별': ['기간제', '파견', '비정규', '차별'],
   '고용보험/지원': ['고용보험', '실업급여', '지원금', '고용안정']
 };
+
+function makeId(length = 10) {
+  return `${Date.now().toString(36)}${Math.random().toString(36).slice(2)}`.slice(0, length);
+}
 
 function defaultState() {
   return {
@@ -422,7 +425,7 @@ app.post('/api/events', (req, res) => {
   if (!requiredString(title)) return res.status(400).json({ message: '회의명을 입력해 주세요.' });
 
   const event = {
-    id: nanoid(10),
+    id: makeId(10),
     title: title.trim(),
     meeting_date: requiredString(meeting_date) ? meeting_date.trim() : null,
     created_at: new Date().toISOString()
