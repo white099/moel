@@ -28,7 +28,7 @@ const SMTP_PASS = process.env.SMTP_PASS || '';
 const SMTP_FROM = process.env.SMTP_FROM || SMTP_USER || 'no-reply@example.com';
 
 const RSS_SOURCES = [
-  { source_name: '고용노동부', category: '고용노동부 소관 법령', url: 'https://www.moel.go.kr/rss/release/law.xml' },
+  { source_name: '대한민국법령정보', category: '고용노동부 소관 법령', url: 'https://www.law.go.kr/' },
   { source_name: '고용노동부', category: '행정해석', url: 'https://www.moel.go.kr/rss/policy/interpretation.xml' },
   { source_name: '고용노동부', category: '지침', url: 'https://www.moel.go.kr/rss/policy/guideline.xml' },
   { source_name: '대법원', category: '노동법 관련 판례', url: 'https://www.scourt.go.kr/portal/information/events/rss.xml' },
@@ -40,6 +40,19 @@ const RSS_SOURCES = [
   { source_name: 'Google News', category: '행정해석', url: 'https://news.google.com/rss/search?q=%EA%B3%A0%EC%9A%A9%EB%85%B8%EB%8F%99%EB%B6%80+%ED%96%89%EC%A0%95%ED%95%B4%EC%84%9D&hl=ko&gl=KR&ceid=KR:ko' },
   { source_name: 'Google News', category: '질의회시', url: 'https://news.google.com/rss/search?q=%EA%B3%A0%EC%9A%A9%EB%85%B8%EB%8F%99%EB%B6%80+%EC%A7%88%EC%9D%98%ED%9A%8C%EC%8B%9C&hl=ko&gl=KR&ceid=KR:ko' },
   { source_name: 'Google News', category: '지침', url: 'https://news.google.com/rss/search?q=%EA%B3%A0%EC%9A%A9%EB%85%B8%EB%8F%99%EB%B6%80+%EC%A7%80%EC%B9%A8&hl=ko&gl=KR&ceid=KR:ko' }
+];
+
+const KOREA_LAW_LINKS = [
+  '근로기준법',
+  '근로자퇴직급여 보장법',
+  '최저임금법',
+  '근로자참여 및 협력증진에 관한 법률',
+  '노동조합 및 노동관계조정법',
+  '기간제 및 단시간근로자 보호 등에 관한 법률',
+  '파견근로자보호 등에 관한 법률',
+  '산업안전보건법',
+  '고용보험법',
+  '남녀고용평등과 일·가정 양립 지원에 관한 법률'
 ];
 
 const FIELD_KEYWORDS = {
@@ -121,6 +134,18 @@ function monthKeyNow() {
   return monthKeyFromDate(new Date().toISOString());
 }
 
+function quarterNowKey() {
+  return quarterKey(monthKeyNow());
+}
+
+function halfNowKey() {
+  return halfKey(monthKeyNow());
+}
+
+function yearNowKey() {
+  return yearKey(monthKeyNow());
+}
+
 function previousMonthKey(base = new Date()) {
   const d = new Date(Date.UTC(base.getUTCFullYear(), base.getUTCMonth(), 1));
   d.setUTCMonth(d.getUTCMonth() - 1);
@@ -139,6 +164,32 @@ function halfKey(monthKey) {
 
 function yearKey(monthKey) {
   return String(monthKey).slice(0, 4);
+}
+
+function monthsFromPeriod(type, value) {
+  if (type === 'quarter') {
+    const match = String(value).match(/^(\d{4})-Q([1-4])$/);
+    if (!match) return [];
+    const y = Number(match[1]);
+    const q = Number(match[2]);
+    const startMonth = (q - 1) * 3 + 1;
+    return [0, 1, 2].map((i) => `${y}-${String(startMonth + i).padStart(2, '0')}`);
+  }
+  if (type === 'half') {
+    const match = String(value).match(/^(\d{4})-H([1-2])$/);
+    if (!match) return [];
+    const y = Number(match[1]);
+    const h = Number(match[2]);
+    const startMonth = h === 1 ? 1 : 7;
+    return [0, 1, 2, 3, 4, 5].map((i) => `${y}-${String(startMonth + i).padStart(2, '0')}`);
+  }
+  if (type === 'year') {
+    const match = String(value).match(/^(\d{4})$/);
+    if (!match) return [];
+    const y = Number(match[1]);
+    return Array.from({ length: 12 }, (_, i) => `${y}-${String(i + 1).padStart(2, '0')}`);
+  }
+  return [];
 }
 
 function inferField(title) {
@@ -195,6 +246,9 @@ function parseCsvRows(text) {
 }
 
 async function fetchRssItems(source, limit = 60) {
+  if (source.source_name === '대한민국법령정보') {
+    return [];
+  }
   try {
     const response = await axios.get(source.url, { timeout: 12000 });
     const parser = new XMLParser({
@@ -228,8 +282,12 @@ async function fetchRssItems(source, limit = 60) {
   }
 }
 
-async function collectLaborNewsForMonth(targetMonth) {
-  const month = requiredString(targetMonth) ? targetMonth.trim() : monthKeyNow();
+async function collectLaborNewsForMonths(targetMonths) {
+  const months = (Array.isArray(targetMonths) ? targetMonths : [targetMonths])
+    .map((m) => String(m || '').trim())
+    .filter((m) => /^\d{4}-\d{2}$/.test(m));
+  const monthSet = new Set(months.length ? months : [monthKeyNow()]);
+  const representativeMonth = [...monthSet][0];
   const collectedAt = new Date().toISOString();
 
   let fetched = 0;
@@ -237,21 +295,26 @@ async function collectLaborNewsForMonth(targetMonth) {
   const source_stats = [];
 
   for (const source of RSS_SOURCES) {
-    const result = await fetchRssItems(source, 80);
+    const result = await fetchRssItems(source, 100);
     const items = Array.isArray(result) ? result : result.items;
     const error = Array.isArray(result) ? null : result.error;
     fetched += items.length;
     let sourceInserted = 0;
 
     for (const item of items) {
-      if (monthKeyFromDate(item.published_at) !== month) continue;
+      const parsedMonth = monthKeyFromDate(item.published_at);
+      const periodMonth = monthSet.has(parsedMonth) ? parsedMonth : representativeMonth;
       const dup = state.labor_news.some((n) => n.title === item.title && n.link === item.link);
       if (dup) continue;
+
+      if (!monthSet.has(parsedMonth) && !error) {
+        // Period filtering is intentionally relaxed to avoid missing labor references.
+      }
 
       state.labor_news.push({
         id: state.seq.news++,
         ...item,
-        period_month: month,
+        period_month: periodMonth,
         collected_at: collectedAt
       });
       inserted += 1;
@@ -267,8 +330,38 @@ async function collectLaborNewsForMonth(targetMonth) {
     });
   }
 
+  let lawInserted = 0;
+  for (const lawName of KOREA_LAW_LINKS) {
+    const link = `https://www.law.go.kr/lsSc.do?menuId=1&subMenuId=15&query=${encodeURIComponent(lawName)}#liBgcolor0`;
+    const title = `대한민국법령정보: ${lawName}`;
+    const dup = state.labor_news.some((n) => n.title === title && n.link === link);
+    if (dup) continue;
+
+    state.labor_news.push({
+      id: state.seq.news++,
+      source_name: '대한민국법령정보',
+      category: '고용노동부 소관 법령',
+      field: inferField(lawName),
+      title,
+      link,
+      published_at: collectedAt,
+      period_month: representativeMonth,
+      collected_at: collectedAt
+    });
+    inserted += 1;
+    lawInserted += 1;
+  }
+
+  source_stats.push({
+    source: '대한민국법령정보',
+    category: '고용노동부 소관 법령',
+    fetched: KOREA_LAW_LINKS.length,
+    inserted: lawInserted,
+    error: null
+  });
+
   saveState();
-  return { month, fetched, inserted, source_stats };
+  return { months: [...monthSet], fetched, inserted, source_stats };
 }
 
 function listNewsByPeriod(type, value) {
@@ -745,17 +838,23 @@ app.get('/api/recipients', (req, res) => {
   });
 });
 
-app.post('/api/news/collect-monthly', async (req, res) => {
-  const month = req.body?.month || monthKeyNow();
-  const result = await collectLaborNewsForMonth(month);
-  res.json(result);
+app.post('/api/news/collect-period', async (req, res) => {
+  const type = String(req.body?.type || 'quarter');
+  const value = String(req.body?.value || quarterNowKey());
+  if (!['quarter', 'half', 'year'].includes(type)) {
+    return res.status(400).json({ message: 'Invalid type.' });
+  }
+  const months = monthsFromPeriod(type, value);
+  if (!months.length) return res.status(400).json({ message: 'Invalid period value.' });
+  const result = await collectLaborNewsForMonths(months);
+  res.json({ period_type: type, period_value: value, ...result });
 });
 
 app.get('/api/reports/period', (req, res) => {
-  const type = String(req.query.type || 'month');
-  const value = String(req.query.value || monthKeyNow());
+  const type = String(req.query.type || 'quarter');
+  const value = String(req.query.value || quarterNowKey());
 
-  if (!['month', 'quarter', 'half', 'year'].includes(type)) {
+  if (!['quarter', 'half', 'year'].includes(type)) {
     return res.status(400).json({ message: 'Invalid type.' });
   }
 
@@ -772,9 +871,9 @@ app.get('/api/reports/period', (req, res) => {
 });
 
 app.get('/api/reports/period-pdf', async (req, res) => {
-  const type = String(req.query.type || 'month');
-  const value = String(req.query.value || monthKeyNow());
-  if (!['month', 'quarter', 'half', 'year'].includes(type)) {
+  const type = String(req.query.type || 'quarter');
+  const value = String(req.query.value || quarterNowKey());
+  if (!['quarter', 'half', 'year'].includes(type)) {
     return res.status(400).json({ message: 'Invalid type.' });
   }
 
@@ -804,11 +903,11 @@ app.get('/api/reports/available-periods', (_, res) => {
 });
 
 app.post('/api/reports/send-period', async (req, res) => {
-  const type = String(req.body?.type || 'month');
-  const value = String(req.body?.value || previousMonthKey(new Date()));
+  const type = String(req.body?.type || 'quarter');
+  const value = String(req.body?.value || quarterNowKey());
   const recipientEmails = Array.isArray(req.body?.recipient_emails) ? req.body.recipient_emails : [];
   const issueIds = Array.isArray(req.body?.issue_ids) ? req.body.issue_ids : [];
-  if (!['month', 'quarter', 'half', 'year'].includes(type)) {
+  if (!['quarter', 'half', 'year'].includes(type)) {
     return res.status(400).json({ message: 'Invalid type.' });
   }
   const result = await sendPeriodReport(type, value, recipientEmails, issueIds);
@@ -816,11 +915,12 @@ app.post('/api/reports/send-period', async (req, res) => {
 });
 
 app.post('/api/reports/send-now', async (req, res) => {
-  const month = monthKeyNow();
+  const quarter = quarterNowKey();
+  const months = monthsFromPeriod('quarter', quarter);
   const recipientEmails = Array.isArray(req.body?.recipient_emails) ? req.body.recipient_emails : [];
   const issueIds = Array.isArray(req.body?.issue_ids) ? req.body.issue_ids : [];
-  await collectLaborNewsForMonth(month);
-  const result = await sendPeriodReport('month', month, recipientEmails, issueIds);
+  await collectLaborNewsForMonths(months);
+  const result = await sendPeriodReport('quarter', quarter, recipientEmails, issueIds);
   res.json(result);
 });
 

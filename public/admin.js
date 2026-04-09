@@ -26,8 +26,7 @@ const rosterQueryMsg = document.getElementById('rosterQueryMsg');
 const rosterQuerySummary = document.getElementById('rosterQuerySummary');
 const rosterQueryBody = document.getElementById('rosterQueryBody');
 
-const collectMonthInput = document.getElementById('collectMonthInput');
-const collectMonthBtn = document.getElementById('collectMonthBtn');
+const collectPeriodBtn = document.getElementById('collectPeriodBtn');
 const periodType = document.getElementById('periodType');
 const periodValue = document.getElementById('periodValue');
 const loadSummaryBtn = document.getElementById('loadSummaryBtn');
@@ -71,11 +70,28 @@ function escapeHtml(value) {
     .replaceAll("'", '&#39;');
 }
 
-function monthNowKey() {
+function quarterNowKey() {
   const d = new Date();
   const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  return `${y}-${m}`;
+  const q = Math.floor(d.getMonth() / 3) + 1;
+  return `${y}-Q${q}`;
+}
+
+function halfNowKey() {
+  const d = new Date();
+  const y = d.getFullYear();
+  const h = d.getMonth() < 6 ? 1 : 2;
+  return `${y}-H${h}`;
+}
+
+function yearNowKey() {
+  return String(new Date().getFullYear());
+}
+
+function currentPeriodValue(type) {
+  if (type === 'quarter') return quarterNowKey();
+  if (type === 'half') return halfNowKey();
+  return yearNowKey();
 }
 
 function renderChips(container, items) {
@@ -299,23 +315,25 @@ async function loadAvailablePeriods() {
   if (!res.ok) throw new Error(data.message || '기간 목록 조회 실패');
 
   const type = periodType.value;
-  const values = type === 'month' ? data.months
-    : type === 'quarter' ? data.quarters
+  const values = type === 'quarter' ? data.quarters
     : type === 'half' ? data.halves
     : data.years;
 
-  periodValue.innerHTML = values.map((v) => `<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join('');
+  const resolvedValues = values && values.length ? values : [currentPeriodValue(type)];
+  periodValue.innerHTML = resolvedValues.map((v) => `<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join('');
+  periodValue.value = resolvedValues[0];
 }
 
-async function collectMonthlyNews() {
-  const month = (collectMonthInput.value || '').trim() || monthNowKey();
-  const res = await fetch('/api/news/collect-monthly', {
+async function collectPeriodNews() {
+  const type = periodType.value;
+  const value = periodValue.value || currentPeriodValue(type);
+  const res = await fetch('/api/news/collect-period', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ month })
+    body: JSON.stringify({ type, value })
   });
   const data = await res.json();
-  if (!res.ok) throw new Error(data.message || '월간 수집 실패');
+  if (!res.ok) throw new Error(data.message || '기간 수집 실패');
   return data;
 }
 
@@ -332,7 +350,7 @@ async function importAttendeesCsv(eventId, csvText) {
 
 async function loadPeriodSummary() {
   const type = periodType.value;
-  const value = periodValue.value;
+  const value = periodValue.value || currentPeriodValue(type);
   const res = await fetch(`/api/reports/period?type=${encodeURIComponent(type)}&value=${encodeURIComponent(value)}`);
   const data = await res.json();
   if (!res.ok) throw new Error(data.message || '기간 리포트 조회 실패');
@@ -364,9 +382,11 @@ async function loadPeriodSummary() {
 async function sendPeriodReport() {
   const recipientEmails = getSelectedRecipientEmails();
   const issueIds = getSelectedIssueIds();
+  const type = periodType.value;
+  const value = periodValue.value || currentPeriodValue(type);
   const payload = {
-    type: periodType.value,
-    value: periodValue.value,
+    type,
+    value,
     recipient_emails: recipientEmails,
     issue_ids: issueIds
   };
@@ -415,7 +435,7 @@ async function loadReportLogs() {
 
 function downloadPeriodPdf() {
   const type = periodType.value;
-  const value = periodValue.value;
+  const value = periodValue.value || currentPeriodValue(type);
   const issueIds = getSelectedIssueIds();
   const params = new URLSearchParams({ type, value });
   if (issueIds.length > 0) params.set('issue_ids', issueIds.join(','));
@@ -546,15 +566,15 @@ periodType.addEventListener('change', async () => {
   }
 });
 
-collectMonthBtn.addEventListener('click', async () => {
-  reportMsg.textContent = '월간 신규 수집 중...';
+collectPeriodBtn.addEventListener('click', async () => {
+  reportMsg.textContent = '선택 기간 신규 수집 중...';
   reportMsg.className = 'msg';
   try {
-    const data = await collectMonthlyNews();
+    const data = await collectPeriodNews();
     await loadAvailablePeriods();
     const failedSources = (data.source_stats || []).filter((s) => s.error);
     const failText = failedSources.length ? `, 실패 소스 ${failedSources.length}개` : '';
-    reportMsg.textContent = `${data.month} 수집 완료: 수집 ${data.fetched}건, 신규 저장 ${data.inserted}건${failText}`;
+    reportMsg.textContent = `${data.period_type}:${data.period_value} 수집 완료: 수집 ${data.fetched}건, 신규 저장 ${data.inserted}건${failText}`;
     reportMsg.className = 'msg success';
 
     collectSourceStats.innerHTML = (data.source_stats || []).map((s) => {
@@ -597,12 +617,12 @@ sendPeriodBtn.addEventListener('click', async () => {
 
 sendNowBtn.addEventListener('click', async () => {
   const selectedIssues = getSelectedIssueIds().length;
-  reportMsg.textContent = '현재월 기준 수시 즉시 발송 중...';
+  reportMsg.textContent = '현재분기 기준 수시 즉시 발송 중...';
   reportMsg.className = 'msg';
   try {
     const data = await sendNowReport();
     await loadReportLogs();
-    reportMsg.textContent = `즉시 발송 완료: month:${monthNowKey()}, 뉴스 ${data.item_count}건(선택 ${selectedIssues}건), 이메일 ${data.email_recipients}명`;
+    reportMsg.textContent = `즉시 발송 완료: quarter:${quarterNowKey()}, 뉴스 ${data.item_count}건(선택 ${selectedIssues}건), 이메일 ${data.email_recipients}명`;
     reportMsg.className = 'msg success';
   } catch (err) {
     reportMsg.textContent = err.message;
@@ -653,7 +673,6 @@ importCsvBtn.addEventListener('click', async () => {
 });
 
 (async () => {
-  collectMonthInput.value = monthNowKey();
   updateIssueSelectionMessage();
   try {
     await loadEventOptions();
