@@ -26,6 +26,7 @@ const loadSummaryBtn = document.getElementById('loadSummaryBtn');
 const sendPeriodBtn = document.getElementById('sendPeriodBtn');
 const sendNowBtn = document.getElementById('sendNowBtn');
 const reportMsg = document.getElementById('reportMsg');
+const collectSourceStats = document.getElementById('collectSourceStats');
 const categorySummary = document.getElementById('categorySummary');
 const fieldSummary = document.getElementById('fieldSummary');
 const reportPreview = document.getElementById('reportPreview');
@@ -288,6 +289,10 @@ collectMonthBtn.addEventListener('click', async () => {
       : '';
     reportMsg.textContent = `${data.month} 수집 완료: 수집 ${data.fetched}건, 신규 저장 ${data.inserted}건${failText}`;
     reportMsg.className = 'msg success';
+    collectSourceStats.innerHTML = (data.source_stats || []).map((s) => {
+      const status = s.error ? `실패: ${escapeHtml(s.error)}` : '정상';
+      return `<div class="report-item"><strong>[${escapeHtml(s.category)}] ${escapeHtml(s.source)}</strong><span>수집 ${s.fetched} / 저장 ${s.inserted} / ${status}</span></div>`;
+    }).join('');
   } catch (err) {
     reportMsg.textContent = err.message;
     reportMsg.className = 'msg error';

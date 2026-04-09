@@ -27,23 +27,27 @@ const SMTP_PASS = process.env.SMTP_PASS || '';
 const SMTP_FROM = process.env.SMTP_FROM || SMTP_USER || 'no-reply@example.com';
 
 const RSS_SOURCES = [
-  { source_name: 'MOEL', category: 'Law Amendments', url: 'https://www.moel.go.kr/rss/release/law.xml' },
-  { source_name: 'MOEL', category: 'Administrative Interpretation', url: 'https://www.moel.go.kr/rss/policy/interpretation.xml' },
-  { source_name: 'MOEL', category: 'Guidelines', url: 'https://www.moel.go.kr/rss/policy/guideline.xml' },
-  { source_name: 'Supreme Court', category: 'Court Cases', url: 'https://www.scourt.go.kr/portal/information/events/rss.xml' },
-  { source_name: 'NLRC', category: 'Labor Commission Decisions', url: 'https://www.nlrc.go.kr/rss/case.xml' },
-  { source_name: 'MOEL', category: 'Amendment Briefings', url: 'https://www.moel.go.kr/rss/news/explain.xml' },
-  { source_name: 'Google News', category: 'Labor News', url: 'https://news.google.com/rss/search?q=%EA%B3%A0%EC%9A%A9%EB%85%B8%EB%8F%99%EB%B6%80+%EB%B2%95%EB%A0%B9&hl=ko&gl=KR&ceid=KR:ko' },
-  { source_name: 'Google News', category: 'Labor Cases', url: 'https://news.google.com/rss/search?q=%EB%85%B8%EB%8F%99%EC%9C%84%EC%9B%90%ED%9A%8C+%ED%8C%90%EC%A0%95%EB%A1%80&hl=ko&gl=KR&ceid=KR:ko' }
+  { source_name: '고용노동부', category: '고용노동부 소관 법령', url: 'https://www.moel.go.kr/rss/release/law.xml' },
+  { source_name: '고용노동부', category: '행정해석', url: 'https://www.moel.go.kr/rss/policy/interpretation.xml' },
+  { source_name: '고용노동부', category: '지침', url: 'https://www.moel.go.kr/rss/policy/guideline.xml' },
+  { source_name: '대법원', category: '노동법 관련 판례', url: 'https://www.scourt.go.kr/portal/information/events/rss.xml' },
+  { source_name: '중앙노동위원회', category: '노동위원회 판정례', url: 'https://www.nlrc.go.kr/rss/case.xml' },
+  { source_name: '고용노동부', category: '질의회시', url: 'https://www.moel.go.kr/rss/news/explain.xml' },
+  { source_name: 'Google News', category: '고용노동부 소관 법령', url: 'https://news.google.com/rss/search?q=%EA%B3%A0%EC%9A%A9%EB%85%B8%EB%8F%99%EB%B6%80+%EC%86%8C%EA%B4%80+%EB%B2%95%EB%A0%B9+%EA%B0%9C%EC%A0%95&hl=ko&gl=KR&ceid=KR:ko' },
+  { source_name: 'Google News', category: '노동법 관련 판례', url: 'https://news.google.com/rss/search?q=%EB%85%B8%EB%8F%99%EB%B2%95+%ED%8C%90%EB%A1%80&hl=ko&gl=KR&ceid=KR:ko' },
+  { source_name: 'Google News', category: '노동위원회 판정례', url: 'https://news.google.com/rss/search?q=%EB%85%B8%EB%8F%99%EC%9C%84%EC%9B%90%ED%9A%8C+%ED%8C%90%EC%A0%95%EB%A1%80&hl=ko&gl=KR&ceid=KR:ko' },
+  { source_name: 'Google News', category: '행정해석', url: 'https://news.google.com/rss/search?q=%EA%B3%A0%EC%9A%A9%EB%85%B8%EB%8F%99%EB%B6%80+%ED%96%89%EC%A0%95%ED%95%B4%EC%84%9D&hl=ko&gl=KR&ceid=KR:ko' },
+  { source_name: 'Google News', category: '질의회시', url: 'https://news.google.com/rss/search?q=%EA%B3%A0%EC%9A%A9%EB%85%B8%EB%8F%99%EB%B6%80+%EC%A7%88%EC%9D%98%ED%9A%8C%EC%8B%9C&hl=ko&gl=KR&ceid=KR:ko' },
+  { source_name: 'Google News', category: '지침', url: 'https://news.google.com/rss/search?q=%EA%B3%A0%EC%9A%A9%EB%85%B8%EB%8F%99%EB%B6%80+%EC%A7%80%EC%B9%A8&hl=ko&gl=KR&ceid=KR:ko' }
 ];
 
 const FIELD_KEYWORDS = {
-  'Labor Standards': ['work', 'leave', 'holiday', 'labor standards'],
-  'Wages and Retirement': ['wage', 'minimum wage', 'retirement', 'pension'],
-  'Labor Relations': ['union', 'collective', 'strike', 'labor relations'],
-  'Safety and Health': ['safety', 'accident', 'health', 'risk'],
-  'Non-Regular and Discrimination': ['fixed term', 'dispatch', 'non-regular', 'discrimination'],
-  'Employment Insurance and Support': ['employment insurance', 'benefit', 'support']
+  '근로기준': ['근로기준', '근로시간', '연차', '휴게', '휴일'],
+  '임금/퇴직': ['임금', '통상임금', '최저임금', '퇴직금', '퇴직연금'],
+  '노사관계': ['노사', '노동조합', '쟁의', '단체협약'],
+  '산업안전/보건': ['산업안전', '중대재해', '보건', '위험성평가'],
+  '비정규/차별': ['기간제', '파견', '비정규', '차별'],
+  '고용보험/지원': ['고용보험', '실업급여', '지원금', '고용안정']
 };
 
 function makeId(length = 10) {
@@ -141,7 +145,7 @@ function inferField(title) {
   for (const [field, words] of Object.entries(FIELD_KEYWORDS)) {
     if (words.some((w) => lower.includes(w.toLowerCase()))) return field;
   }
-  return 'General';
+  return '기타';
 }
 
 function normalizeItems(raw) {
@@ -279,7 +283,7 @@ function listNewsByPeriod(type, value) {
 function summarizeBy(items, key) {
   const map = new Map();
   for (const item of items) {
-    const k = item[key] || 'General';
+    const k = item[key] || '기타';
     map.set(k, (map.get(k) || 0) + 1);
   }
   return Array.from(map.entries()).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count);
@@ -290,7 +294,7 @@ function buildReportText(items, label) {
   const byCat = new Map();
 
   for (const item of items) {
-    const cat = item.category || 'General';
+    const cat = item.category || '기타';
     if (!byCat.has(cat)) byCat.set(cat, []);
     byCat.get(cat).push(item);
   }
