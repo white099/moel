@@ -29,6 +29,7 @@ const SMTP_FROM = process.env.SMTP_FROM || SMTP_USER || 'no-reply@example.com';
 
 const RSS_SOURCES = [
   { source_name: '대한민국법령정보', category: '고용노동부 소관 법령', url: 'https://www.law.go.kr/' },
+  { source_name: '고용노동부', category: '고용노동부 소관 법령', url: 'https://www.moel.go.kr/rss/news/recent.xml' },
   { source_name: '고용노동부', category: '행정해석', url: 'https://www.moel.go.kr/rss/policy/interpretation.xml' },
   { source_name: '고용노동부', category: '지침', url: 'https://www.moel.go.kr/rss/policy/guideline.xml' },
   { source_name: '대법원', category: '노동법 관련 판례', url: 'https://www.scourt.go.kr/portal/information/events/rss.xml' },
@@ -39,7 +40,11 @@ const RSS_SOURCES = [
   { source_name: 'Google News', category: '노동위원회 판정례', url: 'https://news.google.com/rss/search?q=%EB%85%B8%EB%8F%99%EC%9C%84%EC%9B%90%ED%9A%8C+%ED%8C%90%EC%A0%95%EB%A1%80&hl=ko&gl=KR&ceid=KR:ko' },
   { source_name: 'Google News', category: '행정해석', url: 'https://news.google.com/rss/search?q=%EA%B3%A0%EC%9A%A9%EB%85%B8%EB%8F%99%EB%B6%80+%ED%96%89%EC%A0%95%ED%95%B4%EC%84%9D&hl=ko&gl=KR&ceid=KR:ko' },
   { source_name: 'Google News', category: '질의회시', url: 'https://news.google.com/rss/search?q=%EA%B3%A0%EC%9A%A9%EB%85%B8%EB%8F%99%EB%B6%80+%EC%A7%88%EC%9D%98%ED%9A%8C%EC%8B%9C&hl=ko&gl=KR&ceid=KR:ko' },
-  { source_name: 'Google News', category: '지침', url: 'https://news.google.com/rss/search?q=%EA%B3%A0%EC%9A%A9%EB%85%B8%EB%8F%99%EB%B6%80+%EC%A7%80%EC%B9%A8&hl=ko&gl=KR&ceid=KR:ko' }
+  { source_name: 'Google News', category: '지침', url: 'https://news.google.com/rss/search?q=%EA%B3%A0%EC%9A%A9%EB%85%B8%EB%8F%99%EB%B6%80+%EC%A7%80%EC%B9%A8&hl=ko&gl=KR&ceid=KR:ko' },
+  { source_name: '고용노동부(보완)', category: '고용노동부 소관 법령', url: 'https://news.google.com/rss/search?q=site%3Amoel.go.kr+%EB%B2%95%EB%A0%B9+%EA%B0%9C%EC%A0%95&hl=ko&gl=KR&ceid=KR:ko' },
+  { source_name: '고용노동부(보완)', category: '행정해석', url: 'https://news.google.com/rss/search?q=site%3Amoel.go.kr+%ED%96%89%EC%A0%95%ED%95%B4%EC%84%9D&hl=ko&gl=KR&ceid=KR:ko' },
+  { source_name: '고용노동부(보완)', category: '질의회시', url: 'https://news.google.com/rss/search?q=site%3Amoel.go.kr+%EC%A7%88%EC%9D%98%ED%9A%8C%EC%8B%9C&hl=ko&gl=KR&ceid=KR:ko' },
+  { source_name: '고용노동부(보완)', category: '지침', url: 'https://news.google.com/rss/search?q=site%3Amoel.go.kr+%EC%A7%80%EC%B9%A8&hl=ko&gl=KR&ceid=KR:ko' }
 ];
 
 const KOREA_LAW_LINKS = [
@@ -210,6 +215,13 @@ function normalizeItems(raw) {
   return Array.isArray(raw) ? raw : [raw];
 }
 
+function stripHtml(text) {
+  return String(text || '')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 function safeDateIso(value) {
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return new Date().toISOString();
@@ -271,13 +283,22 @@ async function fetchRssItems(source, limit = 60) {
         const title = it.title?.['#text'] || it.title || '';
         const link = it.link?.href || it.link || '';
         const pubDate = it.pubDate || it.updated || it.published || new Date().toISOString();
+        const rawSummary = it.description?.['#text']
+          || it.description
+          || it.summary?.['#text']
+          || it.summary
+          || it.content?.['#text']
+          || it.content
+          || '';
+        const summary = stripHtml(rawSummary).slice(0, 700);
         return {
           source_name: source.source_name,
           category: source.category,
           field: inferField(title),
           title: String(title).trim(),
           link: String(link).trim(),
-          published_at: safeDateIso(pubDate)
+          published_at: safeDateIso(pubDate),
+          summary
         };
       })
       .filter((x) => x.title)
@@ -349,6 +370,7 @@ async function collectLaborNewsForMonths(targetMonths) {
       field: inferField(lawName),
       title,
       link,
+      summary: `대한민국법령정보센터에서 ${lawName} 관련 최신 조문/개정 정보를 확인할 수 있습니다.`,
       published_at: collectedAt,
       period_month: representativeMonth,
       collected_at: collectedAt

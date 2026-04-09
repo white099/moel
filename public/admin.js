@@ -29,7 +29,6 @@ const rosterQueryBody = document.getElementById('rosterQueryBody');
 const collectPeriodBtn = document.getElementById('collectPeriodBtn');
 const periodType = document.getElementById('periodType');
 const periodValue = document.getElementById('periodValue');
-const loadSummaryBtn = document.getElementById('loadSummaryBtn');
 const sendPeriodBtn = document.getElementById('sendPeriodBtn');
 const sendNowBtn = document.getElementById('sendNowBtn');
 const toggleRecipientsBtn = document.getElementById('toggleRecipientsBtn');
@@ -383,6 +382,7 @@ async function loadPeriodSummary() {
           <div>카테고리: ${escapeHtml(item.category || '-')}</div>
           <div>분야: ${escapeHtml(item.field || '-')}</div>
           <div>발행일: ${escapeHtml(item.published_at || '-')}</div>
+          <div>내용: ${escapeHtml(item.summary || '요약 정보가 없습니다.')}</div>
           <div><a href="${escapeHtml(item.link || '#')}" target="_blank" rel="noopener">${escapeHtml(item.link || '')}</a></div>
         </details>
       `).join('')}
@@ -588,7 +588,7 @@ periodType.addEventListener('change', async () => {
 });
 
 collectPeriodBtn.addEventListener('click', async () => {
-  reportMsg.textContent = '선택 기간 신규 수집 중...';
+  reportMsg.textContent = '선택 기간 수집/조회 중...';
   reportMsg.className = 'msg';
   try {
     const data = await collectPeriodNews();
@@ -596,26 +596,13 @@ collectPeriodBtn.addEventListener('click', async () => {
     await loadPeriodSummary();
     const failedSources = (data.source_stats || []).filter((s) => s.error);
     const failText = failedSources.length ? `, 실패 소스 ${failedSources.length}개` : '';
-    reportMsg.textContent = `${data.period_type}:${data.period_value} 수집 완료: 수집 ${data.fetched}건, 신규 저장 ${data.inserted}건${failText} (아래에서 이슈 선택 가능)`;
+    reportMsg.textContent = `${data.period_type}:${data.period_value} 수집/조회 완료: 수집 ${data.fetched}건, 신규 저장 ${data.inserted}건${failText} (아래에서 이슈 선택 가능)`;
     reportMsg.className = 'msg success';
 
     collectSourceStats.innerHTML = (data.source_stats || []).map((s) => {
       const status = s.error ? `실패: ${escapeHtml(s.error)}` : '정상';
       return `<div class="report-item"><strong>[${escapeHtml(s.category)}] ${escapeHtml(s.source)}</strong><span>수집 ${s.fetched} / 저장 ${s.inserted} / ${status}</span></div>`;
     }).join('');
-  } catch (err) {
-    reportMsg.textContent = err.message;
-    reportMsg.className = 'msg error';
-  }
-});
-
-loadSummaryBtn.addEventListener('click', async () => {
-  reportMsg.textContent = '수집 정보 조회 중...';
-  reportMsg.className = 'msg';
-  try {
-    const data = await loadPeriodSummary();
-    reportMsg.textContent = `${data.period_type}:${data.period_value} 수집 정보 ${data.count}건 (선택 가능)`;
-    reportMsg.className = 'msg success';
   } catch (err) {
     reportMsg.textContent = err.message;
     reportMsg.className = 'msg error';
