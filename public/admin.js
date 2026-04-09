@@ -43,12 +43,8 @@ const recipientList = document.getElementById('recipientList');
 const reportMsg = document.getElementById('reportMsg');
 const collectSourceStats = document.getElementById('collectSourceStats');
 const reportPreview = document.getElementById('reportPreview');
-const selectAllIssuesBtn = document.getElementById('selectAllIssuesBtn');
-const clearIssuesBtn = document.getElementById('clearIssuesBtn');
-const applyIssueSelectionBtn = document.getElementById('applyIssueSelectionBtn');
 const previewPdfBtn = document.getElementById('previewPdfBtn');
 const downloadPdfBtn = document.getElementById('downloadPdfBtn');
-const partialSelectPanel = document.getElementById('partialSelectPanel');
 const issueSelectMsg = document.getElementById('issueSelectMsg');
 const pdfPreviewPanel = document.getElementById('pdfPreviewPanel');
 const pdfPreviewFrame = document.getElementById('pdfPreviewFrame');
@@ -192,41 +188,8 @@ function getSelectedIssueIds() {
 
 function updateIssueSelectionMessage() {
   const selected = getSelectedIssueIds().length;
-  issueSelectMsg.textContent = `이슈 ${currentReportItems.length}건 중 ${selected}건 선택`;
+  issueSelectMsg.textContent = `이슈 ${currentReportItems.length}건 중 ${selected}건 선택 (항목별 체크로 선택)`;
   issueSelectMsg.className = 'msg';
-}
-
-function syncIssueCheckboxes(issueId, checked) {
-  document.querySelectorAll(`.issue-check[value="${issueId}"]`).forEach((el) => {
-    el.checked = checked;
-  });
-}
-
-function renderPartialSelectPanel() {
-  if (!currentReportItems.length) {
-    partialSelectPanel.innerHTML = '<p>선택 가능한 이슈가 없습니다.</p>';
-    return;
-  }
-
-  const selectedSet = new Set(getSelectedIssueIds());
-  partialSelectPanel.innerHTML = currentReportItems.map((item) => `
-    <label class="report-item">
-      <span>
-        <input class="partial-issue-check" type="checkbox" value="${Number(item.id)}" ${selectedSet.has(Number(item.id)) ? 'checked' : ''} />
-        ${escapeHtml(item.title || '')}
-      </span>
-      <span>${escapeHtml(item.published_at || '-')}</span>
-    </label>
-  `).join('');
-
-  document.querySelectorAll('.partial-issue-check').forEach((el) => {
-    el.addEventListener('change', () => {
-      const issueId = Number(el.value);
-      if (!Number.isFinite(issueId)) return;
-      syncIssueCheckboxes(issueId, el.checked);
-      updateIssueSelectionMessage();
-    });
-  });
 }
 
 function groupIssuesByField(items) {
@@ -435,9 +398,6 @@ async function loadPeriodSummary() {
   document.querySelectorAll('.issue-check').forEach((el) => {
     el.addEventListener('change', updateIssueSelectionMessage);
   });
-  if (!partialSelectPanel.classList.contains('hidden')) {
-    renderPartialSelectPanel();
-  }
   updateIssueSelectionMessage();
 
   return data;
@@ -592,23 +552,6 @@ selectAllRecipientsBtn.addEventListener('click', () => {
 clearRecipientsBtn.addEventListener('click', () => {
   document.querySelectorAll('.recipient-check').forEach((el) => { el.checked = false; });
   updateRecipientSummaryText(recipientCandidates.length);
-});
-selectAllIssuesBtn.addEventListener('click', () => {
-  document.querySelectorAll('.issue-check').forEach((el) => { el.checked = true; });
-  updateIssueSelectionMessage();
-});
-clearIssuesBtn.addEventListener('click', () => {
-  partialSelectPanel.classList.remove('hidden');
-  renderPartialSelectPanel();
-  issueSelectMsg.textContent = '일부 선택 모드: 세부 항목을 각각 체크해 주세요.';
-  issueSelectMsg.className = 'msg';
-  updateIssueSelectionMessage();
-});
-applyIssueSelectionBtn.addEventListener('click', () => {
-  const selected = getSelectedIssueIds().length;
-  issueSelectMsg.textContent = `선택 완료: ${selected}건 기준으로 PDF/발송에 반영됩니다.`;
-  issueSelectMsg.className = 'msg success';
-  previewPeriodPdf();
 });
 previewPdfBtn.addEventListener('click', () => {
   previewPeriodPdf();
