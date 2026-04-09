@@ -379,7 +379,7 @@ async function loadPeriodSummary() {
   `).join('');
 
   if (!currentReportItems.length) {
-    reportPreview.innerHTML = '<p>해당 기간 데이터가 없습니다.</p>';
+    reportPreview.innerHTML = '<p>해당 기간 수집 데이터가 없습니다. "선택 기간 신규 수집" 후 다시 조회해 주세요.</p>';
   }
   document.querySelectorAll('.issue-check').forEach((el) => {
     el.addEventListener('change', updateIssueSelectionMessage);
@@ -582,9 +582,10 @@ collectPeriodBtn.addEventListener('click', async () => {
   try {
     const data = await collectPeriodNews();
     await loadAvailablePeriods();
+    await loadPeriodSummary();
     const failedSources = (data.source_stats || []).filter((s) => s.error);
     const failText = failedSources.length ? `, 실패 소스 ${failedSources.length}개` : '';
-    reportMsg.textContent = `${data.period_type}:${data.period_value} 수집 완료: 수집 ${data.fetched}건, 신규 저장 ${data.inserted}건${failText}`;
+    reportMsg.textContent = `${data.period_type}:${data.period_value} 수집 완료: 수집 ${data.fetched}건, 신규 저장 ${data.inserted}건${failText} (아래에서 이슈 선택 가능)`;
     reportMsg.className = 'msg success';
 
     collectSourceStats.innerHTML = (data.source_stats || []).map((s) => {
@@ -598,11 +599,11 @@ collectPeriodBtn.addEventListener('click', async () => {
 });
 
 loadSummaryBtn.addEventListener('click', async () => {
-  reportMsg.textContent = '기간 리포트 조회 중...';
+  reportMsg.textContent = '수집 정보 조회 중...';
   reportMsg.className = 'msg';
   try {
     const data = await loadPeriodSummary();
-    reportMsg.textContent = `${data.period_type}:${data.period_value} 총 ${data.count}건`;
+    reportMsg.textContent = `${data.period_type}:${data.period_value} 수집 정보 ${data.count}건 (선택 가능)`;
     reportMsg.className = 'msg success';
   } catch (err) {
     reportMsg.textContent = err.message;
@@ -689,6 +690,7 @@ importCsvBtn.addEventListener('click', async () => {
     await loadRecipientCandidates();
     await queryRosters();
     await loadAvailablePeriods();
+    await loadPeriodSummary();
   } catch {
     // no data yet
   }
