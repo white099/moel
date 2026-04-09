@@ -1,0 +1,129 @@
+﻿<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>QR 참석자 명부 관리자</title>
+  <link rel="stylesheet" href="/style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js"></script>
+</head>
+<body>
+  <main class="container">
+    <h1>회의 참석자 명부 관리자</h1>
+
+    <section class="card">
+      <h2>회의 생성</h2>
+      <form id="createEventForm" class="grid-2">
+        <label>
+          회의명
+          <input name="title" required placeholder="예: 2026년 2분기 노사협의회" />
+        </label>
+        <label>
+          회의일자
+          <input type="date" name="meeting_date" />
+        </label>
+        <button type="submit">회의 만들기</button>
+      </form>
+      <p id="createMsg" class="msg"></p>
+    </section>
+
+    <section id="eventPanel" class="card hidden">
+      <h2>체크인 QR</h2>
+      <p id="eventInfo"></p>
+      <canvas id="qrcode"></canvas>
+      <p><a id="checkinLink" target="_blank" rel="noopener"></a></p>
+      <div class="row">
+        <button id="refreshBtn">명부 새로고침</button>
+        <button id="printBtn">명부 출력</button>
+        <a id="downloadCsv" class="btn" href="#">CSV 다운로드</a>
+      </div>
+    </section>
+
+    <section id="rosterPanel" class="card hidden">
+      <h2>참석자 명부</h2>
+      <p id="rosterCount"></p>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>성명</th>
+              <th>사업장명</th>
+              <th>직책</th>
+              <th>휴대전화번호</th>
+              <th>이메일 주소</th>
+              <th>제출시각</th>
+            </tr>
+          </thead>
+          <tbody id="rosterBody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>노동 이슈 수집/리포트</h2>
+      <div class="grid-3">
+        <label>
+          월간 수집 대상(YYYY-MM)
+          <input id="collectMonthInput" placeholder="예: 2026-04" />
+        </label>
+        <div class="inline-actions">
+          <button id="collectMonthBtn">월간 신규 수집</button>
+        </div>
+      </div>
+
+      <div class="grid-3">
+        <label>
+          기간 유형
+          <select id="periodType">
+            <option value="month">월간</option>
+            <option value="quarter">분기</option>
+            <option value="half">반기</option>
+            <option value="year">연도</option>
+          </select>
+        </label>
+        <label>
+          기간 값
+          <select id="periodValue"></select>
+        </label>
+        <div class="inline-actions">
+          <button id="loadSummaryBtn">기간 리포트 조회</button>
+          <button id="sendPeriodBtn">선택 기간 발송</button>
+          <button id="sendNowBtn">수시 즉시 발송(현재월)</button>
+        </div>
+      </div>
+
+      <p id="reportMsg" class="msg"></p>
+
+      <h3>카테고리별 집계</h3>
+      <div id="categorySummary" class="chips"></div>
+
+      <h3>분야별 집계</h3>
+      <div id="fieldSummary" class="chips"></div>
+
+      <h3>상세 항목</h3>
+      <div id="reportPreview" class="report-box"></div>
+
+      <h3>발송 로그</h3>
+      <div class="row">
+        <button id="loadLogsBtn">발송 로그 불러오기</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>발송시각</th>
+              <th>이메일 수신자</th>
+              <th>리포트 항목수</th>
+              <th>상태</th>
+              <th>상세</th>
+            </tr>
+          </thead>
+          <tbody id="reportLogsBody"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script src="/admin.js"></script>
+</body>
+</html>

@@ -1,0 +1,35 @@
+﻿<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>참석자 명부 출력</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <main class="container print-container">
+    <h1>회의 참석자 명부</h1>
+    <p id="printEventInfo"></p>
+    <div class="row no-print">
+      <button id="printNowBtn">인쇄</button>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>성명</th>
+            <th>사업장명</th>
+            <th>직책</th>
+            <th>휴대전화번호</th>
+            <th>이메일 주소</th>
+            <th>제출시각</th>
+          </tr>
+        </thead>
+        <tbody id="printRosterBody"></tbody>
+      </table>
+    </div>
+  </main>
+
+  <script src="/print.js"></script>
+</body>
+</html>
