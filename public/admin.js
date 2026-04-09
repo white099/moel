@@ -378,9 +378,9 @@ async function loadPeriodSummary() {
     <div class="report-item">
       <strong>${escapeHtml(field)} (${rows.length}건)</strong>
       ${rows.map((item) => `
+        <label><input class="issue-check" type="checkbox" value="${Number(item.id)}" /> 이 이슈 선택</label>
         <details>
           <summary>${escapeHtml(item.title)}</summary>
-          <label><input class="issue-check" type="checkbox" value="${Number(item.id)}" /> 이 이슈 선택</label>
           <div>출처: ${escapeHtml(item.source_name || '-')}</div>
           <div>카테고리: ${escapeHtml(item.category || '-')}</div>
           <div>분야: ${escapeHtml(item.field || '-')}</div>
@@ -610,9 +610,9 @@ collectPeriodBtn.addEventListener('click', async () => {
     collectSourceStats.innerHTML = (data.source_stats || []).map((s) => {
       const status = s.error ? `실패: ${escapeHtml(s.error)}` : '정상';
       const preview = (s.items_preview || []).map((it) => `
+        <label><input class="issue-check" type="checkbox" value="${Number(it.id)}" /> 이 이슈 선택</label>
         <details class="report-item">
           <summary>${escapeHtml(it.title || '')}</summary>
-          <label><input class="issue-check" type="checkbox" value="${Number(it.id)}" /> 이 이슈 선택</label>
           <span>${escapeHtml(it.published_at || '-')}</span>
           <span>${escapeHtml(it.summary || '요약 없음')}</span>
           <a href="${escapeHtml(it.link || '#')}" target="_blank" rel="noopener">${escapeHtml(it.link || '')}</a>
