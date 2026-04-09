@@ -1,7 +1,7 @@
 ﻿const createForm = document.getElementById('createEventForm');
 const createMsg = document.getElementById('createMsg');
 const portalLink = document.getElementById('portalLink');
-const portalPageQr = document.getElementById('portalPageQr');
+const portalPageQrImage = document.getElementById('portalPageQrImage');
 const copyPortalBtn = document.getElementById('copyPortalBtn');
 const portalMsg = document.getElementById('portalMsg');
 const eventPanel = document.getElementById('eventPanel');
@@ -391,14 +391,7 @@ importCsvBtn.addEventListener('click', async () => {
 (async () => {
   portalLink.href = portalUrl;
   portalLink.textContent = portalUrl;
-  try {
-    await QRCode.toCanvas(portalPageQr, portalUrl, {
-      width: 220,
-      margin: 1
-    });
-  } catch (error) {
-    console.error(error);
-  }
+  portalPageQrImage.src = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(portalUrl)}`;
 
   collectMonthInput.value = monthNowKey();
   try {
