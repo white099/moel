@@ -23,24 +23,17 @@
         </label>
         <button type="submit">회의 만들기</button>
       </form>
-      <p id="createMsg" class="msg"></p>
-    </section>
-
-    <section class="card">
-      <h2>QR 접속 페이지 노출</h2>
-      <p>아래 페이지를 공유하면 참석자가 회의를 선택해 QR로 바로 접속할 수 있습니다.</p>
-      <img id="portalPageQrImage" width="220" height="220" alt="포털 링크 QR 코드" />
-      <p><a id="portalLink" target="_blank" rel="noopener"></a></p>
       <div class="row">
-        <button id="copyPortalBtn">포털 링크 복사</button>
+        <button id="jumpToQrBtn" class="hidden" type="button">아래 QR로 바로 이동</button>
       </div>
-      <p class="msg" id="portalMsg"></p>
+      <p id="createMsg" class="msg"></p>
     </section>
 
     <section id="eventPanel" class="card hidden">
       <h2>체크인 QR</h2>
       <p id="eventInfo"></p>
       <canvas id="qrcode"></canvas>
+      <img id="checkinQrImage" class="hidden" width="220" height="220" alt="체크인 QR 코드" />
       <p><a id="checkinLink" target="_blank" rel="noopener"></a></p>
       <p><a id="eventPortalLink" target="_blank" rel="noopener"></a></p>
       <div class="row">
@@ -54,6 +47,7 @@
         <button id="importCsvBtn">CSV 업로드로 명부 등록</button>
       </div>
       <p id="importMsg" class="msg"></p>
+      <p id="eventMsg" class="msg"></p>
     </section>
 
     <section id="rosterPanel" class="card hidden">

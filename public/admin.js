@@ -1,12 +1,11 @@
 ﻿const createForm = document.getElementById('createEventForm');
 const createMsg = document.getElementById('createMsg');
-const portalLink = document.getElementById('portalLink');
-const portalPageQrImage = document.getElementById('portalPageQrImage');
-const copyPortalBtn = document.getElementById('copyPortalBtn');
-const portalMsg = document.getElementById('portalMsg');
+const jumpToQrBtn = document.getElementById('jumpToQrBtn');
 const eventPanel = document.getElementById('eventPanel');
 const rosterPanel = document.getElementById('rosterPanel');
 const eventInfo = document.getElementById('eventInfo');
+const qrcodeCanvas = document.getElementById('qrcode');
+const checkinQrImage = document.getElementById('checkinQrImage');
 const checkinLink = document.getElementById('checkinLink');
 const eventPortalLink = document.getElementById('eventPortalLink');
 const rosterBody = document.getElementById('rosterBody');
@@ -18,6 +17,7 @@ const downloadCsv = document.getElementById('downloadCsv');
 const csvFileInput = document.getElementById('csvFileInput');
 const importCsvBtn = document.getElementById('importCsvBtn');
 const importMsg = document.getElementById('importMsg');
+const eventMsg = document.getElementById('eventMsg');
 
 const collectMonthInput = document.getElementById('collectMonthInput');
 const collectMonthBtn = document.getElementById('collectMonthBtn');
@@ -117,10 +117,18 @@ async function renderEvent(event) {
   eventPortalLink.textContent = `이 회의 QR페이지: ${eventPortalLink.href}`;
   downloadCsv.href = `/api/events/${event.id}/attendees.csv`;
 
-  await QRCode.toCanvas(document.getElementById('qrcode'), event.checkin_url, {
-    width: 220,
-    margin: 1
-  });
+  if (window.QRCode && typeof QRCode.toCanvas === 'function') {
+    qrcodeCanvas.classList.remove('hidden');
+    checkinQrImage.classList.add('hidden');
+    await QRCode.toCanvas(qrcodeCanvas, event.checkin_url, {
+      width: 220,
+      margin: 1
+    });
+  } else {
+    qrcodeCanvas.classList.add('hidden');
+    checkinQrImage.classList.remove('hidden');
+    checkinQrImage.src = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(event.checkin_url)}`;
+  }
 
   try {
     await loadRoster(event.id);
@@ -253,6 +261,8 @@ createForm.addEventListener('submit', async (e) => {
     });
 
     await renderEvent(event);
+    jumpToQrBtn.classList.remove('hidden');
+    eventPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
     createMsg.textContent = '회의가 생성되었고 QR이 즉시 생성되었습니다.';
     createMsg.className = 'msg success';
   } catch (err) {
@@ -267,12 +277,12 @@ refreshBtn.addEventListener('click', async () => {
 });
 
 printBtn.addEventListener('click', printRoster);
-copyPortalBtn.addEventListener('click', async () => {
-  await copyText(portalUrl, portalMsg, '포털 링크를 복사했습니다.');
-});
 copyEventPortalBtn.addEventListener('click', async () => {
   if (!currentEventId) return;
-  await copyText(`${portalUrl}?event=${encodeURIComponent(currentEventId)}`, portalMsg, '이 회의 QR페이지 링크를 복사했습니다.');
+  await copyText(`${portalUrl}?event=${encodeURIComponent(currentEventId)}`, eventMsg, '이 회의 QR페이지 링크를 복사했습니다.');
+});
+jumpToQrBtn.addEventListener('click', () => {
+  eventPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
 });
 
 periodType.addEventListener('change', async () => {
@@ -389,10 +399,6 @@ importCsvBtn.addEventListener('click', async () => {
 });
 
 (async () => {
-  portalLink.href = portalUrl;
-  portalLink.textContent = portalUrl;
-  portalPageQrImage.src = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(portalUrl)}`;
-
   collectMonthInput.value = monthNowKey();
   try {
     await loadAvailablePeriods();
