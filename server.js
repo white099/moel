@@ -895,10 +895,45 @@ app.get('/api/reports/period-pdf', async (req, res) => {
 });
 
 app.get('/api/reports/available-periods', (_, res) => {
-  const months = [...new Set(state.labor_news.map((n) => n.period_month))].sort().reverse();
-  const quarters = [...new Set(months.map(quarterKey))].sort().reverse();
-  const halves = [...new Set(months.map(halfKey))].sort().reverse();
-  const years = [...new Set(months.map(yearKey))].sort().reverse();
+  const existingMonths = [...new Set(state.labor_news.map((n) => n.period_month))];
+  const now = new Date();
+
+  const generatedMonths = [];
+  for (let i = 0; i < 36; i += 1) {
+    const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+    d.setUTCMonth(d.getUTCMonth() - i);
+    const y = d.getUTCFullYear();
+    const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+    generatedMonths.push(`${y}-${m}`);
+  }
+
+  const months = [...new Set([...existingMonths, ...generatedMonths])].sort().reverse();
+  const existingQuarters = existingMonths.map(quarterKey);
+  const existingHalves = existingMonths.map(halfKey);
+  const existingYears = existingMonths.map(yearKey);
+
+  const generatedQuarters = [];
+  for (let i = 0; i < 16; i += 1) {
+    const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+    d.setUTCMonth(d.getUTCMonth() - (i * 3));
+    generatedQuarters.push(quarterKey(monthKeyFromDate(d.toISOString())));
+  }
+
+  const generatedHalves = [];
+  for (let i = 0; i < 10; i += 1) {
+    const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+    d.setUTCMonth(d.getUTCMonth() - (i * 6));
+    generatedHalves.push(halfKey(monthKeyFromDate(d.toISOString())));
+  }
+
+  const generatedYears = [];
+  for (let i = 0; i < 10; i += 1) {
+    generatedYears.push(String(now.getUTCFullYear() - i));
+  }
+
+  const quarters = [...new Set([...existingQuarters, ...generatedQuarters])].sort().reverse();
+  const halves = [...new Set([...existingHalves, ...generatedHalves])].sort().reverse();
+  const years = [...new Set([...existingYears, ...generatedYears])].sort().reverse();
   res.json({ months, quarters, halves, years });
 });
 
