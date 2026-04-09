@@ -14,6 +14,9 @@ const refreshBtn = document.getElementById('refreshBtn');
 const printBtn = document.getElementById('printBtn');
 const copyEventPortalBtn = document.getElementById('copyEventPortalBtn');
 const downloadCsv = document.getElementById('downloadCsv');
+const csvFileInput = document.getElementById('csvFileInput');
+const importCsvBtn = document.getElementById('importCsvBtn');
+const importMsg = document.getElementById('importMsg');
 
 const collectMonthInput = document.getElementById('collectMonthInput');
 const collectMonthBtn = document.getElementById('collectMonthBtn');
@@ -146,6 +149,17 @@ async function collectMonthlyNews() {
   return data;
 }
 
+async function importAttendeesCsv(eventId, csvText) {
+  const res = await fetch(`/api/events/${eventId}/attendees/import-csv`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ csv_text: csvText })
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.message || 'CSV 업로드 실패');
+  return data;
+}
+
 async function loadPeriodSummary() {
   const type = periodType.value;
   const value = periodValue.value;
@@ -268,7 +282,11 @@ collectMonthBtn.addEventListener('click', async () => {
   try {
     const data = await collectMonthlyNews();
     await loadAvailablePeriods();
-    reportMsg.textContent = `${data.month} 수집 완료: 수집 ${data.fetched}건, 신규 저장 ${data.inserted}건`;
+    const failedSources = (data.source_stats || []).filter((s) => s.error);
+    const failText = failedSources.length
+      ? `, 실패 소스 ${failedSources.length}개`
+      : '';
+    reportMsg.textContent = `${data.month} 수집 완료: 수집 ${data.fetched}건, 신규 저장 ${data.inserted}건${failText}`;
     reportMsg.className = 'msg success';
   } catch (err) {
     reportMsg.textContent = err.message;
@@ -327,6 +345,34 @@ loadLogsBtn.addEventListener('click', async () => {
   } catch (err) {
     reportMsg.textContent = err.message;
     reportMsg.className = 'msg error';
+  }
+});
+
+importCsvBtn.addEventListener('click', async () => {
+  if (!currentEventId) {
+    importMsg.textContent = '먼저 회의를 생성/선택해 주세요.';
+    importMsg.className = 'msg error';
+    return;
+  }
+
+  const file = csvFileInput.files && csvFileInput.files[0];
+  if (!file) {
+    importMsg.textContent = 'CSV 파일을 선택해 주세요.';
+    importMsg.className = 'msg error';
+    return;
+  }
+
+  importMsg.textContent = 'CSV 업로드 중...';
+  importMsg.className = 'msg';
+  try {
+    const csvText = await file.text();
+    const result = await importAttendeesCsv(currentEventId, csvText);
+    await loadRoster(currentEventId);
+    importMsg.textContent = `업로드 완료: 등록 ${result.inserted}건, 건너뜀 ${result.skipped}건`;
+    importMsg.className = 'msg success';
+  } catch (err) {
+    importMsg.textContent = err.message;
+    importMsg.className = 'msg error';
   }
 });
 

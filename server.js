@@ -32,7 +32,9 @@ const RSS_SOURCES = [
   { source_name: 'MOEL', category: 'Guidelines', url: 'https://www.moel.go.kr/rss/policy/guideline.xml' },
   { source_name: 'Supreme Court', category: 'Court Cases', url: 'https://www.scourt.go.kr/portal/information/events/rss.xml' },
   { source_name: 'NLRC', category: 'Labor Commission Decisions', url: 'https://www.nlrc.go.kr/rss/case.xml' },
-  { source_name: 'MOEL', category: 'Amendment Briefings', url: 'https://www.moel.go.kr/rss/news/explain.xml' }
+  { source_name: 'MOEL', category: 'Amendment Briefings', url: 'https://www.moel.go.kr/rss/news/explain.xml' },
+  { source_name: 'Google News', category: 'Labor News', url: 'https://news.google.com/rss/search?q=%EA%B3%A0%EC%9A%A9%EB%85%B8%EB%8F%99%EB%B6%80+%EB%B2%95%EB%A0%B9&hl=ko&gl=KR&ceid=KR:ko' },
+  { source_name: 'Google News', category: 'Labor Cases', url: 'https://news.google.com/rss/search?q=%EB%85%B8%EB%8F%99%EC%9C%84%EC%9B%90%ED%9A%8C+%ED%8C%90%EC%A0%95%EB%A1%80&hl=ko&gl=KR&ceid=KR:ko' }
 ];
 
 const FIELD_KEYWORDS = {
@@ -147,6 +149,46 @@ function normalizeItems(raw) {
   return Array.isArray(raw) ? raw : [raw];
 }
 
+function safeDateIso(value) {
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return new Date().toISOString();
+  return d.toISOString();
+}
+
+function parseCsvLine(line) {
+  const out = [];
+  let cur = '';
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i += 1) {
+    const ch = line[i];
+    const next = line[i + 1];
+    if (ch === '"') {
+      if (inQuotes && next === '"') {
+        cur += '"';
+        i += 1;
+      } else {
+        inQuotes = !inQuotes;
+      }
+      continue;
+    }
+    if (ch === ',' && !inQuotes) {
+      out.push(cur.trim());
+      cur = '';
+      continue;
+    }
+    cur += ch;
+  }
+  out.push(cur.trim());
+  return out;
+}
+
+function parseCsvRows(text) {
+  const cleaned = String(text || '').replace(/^\uFEFF/, '');
+  const lines = cleaned.split(/\r?\n/).filter((l) => l.trim().length > 0);
+  if (lines.length <= 1) return [];
+  return lines.slice(1).map(parseCsvLine);
+}
+
 async function fetchRssItems(source, limit = 60) {
   try {
     const response = await axios.get(source.url, { timeout: 12000 });
@@ -171,13 +213,13 @@ async function fetchRssItems(source, limit = 60) {
           field: inferField(title),
           title: String(title).trim(),
           link: String(link).trim(),
-          published_at: new Date(pubDate).toISOString()
+          published_at: safeDateIso(pubDate)
         };
       })
       .filter((x) => x.title)
       .slice(0, limit);
-  } catch {
-    return [];
+  } catch (error) {
+    return { items: [], error: String(error?.message || error) };
   }
 }
 
@@ -187,10 +229,14 @@ async function collectLaborNewsForMonth(targetMonth) {
 
   let fetched = 0;
   let inserted = 0;
+  const source_stats = [];
 
   for (const source of RSS_SOURCES) {
-    const items = await fetchRssItems(source, 80);
+    const result = await fetchRssItems(source, 80);
+    const items = Array.isArray(result) ? result : result.items;
+    const error = Array.isArray(result) ? null : result.error;
     fetched += items.length;
+    let sourceInserted = 0;
 
     for (const item of items) {
       if (monthKeyFromDate(item.published_at) !== month) continue;
@@ -204,11 +250,20 @@ async function collectLaborNewsForMonth(targetMonth) {
         collected_at: collectedAt
       });
       inserted += 1;
+      sourceInserted += 1;
     }
+
+    source_stats.push({
+      source: source.source_name,
+      category: source.category,
+      fetched: items.length,
+      inserted: sourceInserted,
+      error
+    });
   }
 
   saveState();
-  return { month, fetched, inserted };
+  return { month, fetched, inserted, source_stats };
 }
 
 function listNewsByPeriod(type, value) {
@@ -405,6 +460,58 @@ app.post('/api/events/:eventId/attendees', (req, res) => {
   saveState();
 
   return res.status(201).json({ message: 'Registered.' });
+});
+
+app.post('/api/events/:eventId/attendees/import-csv', (req, res) => {
+  const event = state.events.find((e) => e.id === req.params.eventId);
+  if (!event) return res.status(404).json({ message: 'Invalid event.' });
+
+  const csvText = req.body?.csv_text || '';
+  const rows = parseCsvRows(csvText);
+  if (!rows.length) return res.status(400).json({ message: 'CSV rows are empty.' });
+
+  let inserted = 0;
+  let skipped = 0;
+
+  for (const row of rows) {
+    const [name, workplace, position, phone, email] = row;
+    if (!requiredString(name) || !requiredString(workplace) || !requiredString(position)) {
+      skipped += 1;
+      continue;
+    }
+    if (!requiredString(phone) || !isValidPhone(String(phone).trim())) {
+      skipped += 1;
+      continue;
+    }
+    if (!requiredString(email) || !isValidEmail(String(email).trim())) {
+      skipped += 1;
+      continue;
+    }
+
+    const phoneNorm = String(phone).trim();
+    const emailNorm = String(email).trim().toLowerCase();
+    const dup = state.attendees.some((a) => a.event_id === event.id && a.phone === phoneNorm && a.email === emailNorm);
+    if (dup) {
+      skipped += 1;
+      continue;
+    }
+
+    state.attendees.push({
+      id: state.seq.attendee++,
+      event_id: event.id,
+      consent: 1,
+      name: String(name).trim(),
+      workplace: String(workplace).trim(),
+      position: String(position).trim(),
+      phone: phoneNorm,
+      email: emailNorm,
+      submitted_at: new Date().toISOString()
+    });
+    inserted += 1;
+  }
+
+  saveState();
+  return res.json({ inserted, skipped, total_rows: rows.length });
 });
 
 app.get('/api/events/:eventId/attendees', (req, res) => {
