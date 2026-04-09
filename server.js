@@ -1,8 +1,8 @@
-﻿const path = require('path');
+﻿const fs = require('fs');
+const path = require('path');
 const express = require('express');
 const cors = require('cors');
 const { nanoid } = require('nanoid');
-const Database = require('better-sqlite3');
 const axios = require('axios');
 const nodemailer = require('nodemailer');
 const cron = require('node-cron');
@@ -23,6 +23,7 @@ const MAIL_PROVIDER = (process.env.MAIL_PROVIDER || 'korea').toLowerCase();
 const smtpDefaults = MAIL_PROVIDER === 'korea'
   ? { host: 'smtp.korea.com', port: 465, secure: true }
   : { host: '', port: 587, secure: false };
+
 const SMTP_HOST = process.env.SMTP_HOST || smtpDefaults.host;
 const SMTP_PORT = Number(process.env.SMTP_PORT || smtpDefaults.port);
 const SMTP_SECURE = (process.env.SMTP_SECURE || String(smtpDefaults.secure)).toLowerCase() === 'true';
@@ -30,8 +31,8 @@ const SMTP_USER = process.env.SMTP_USER || '';
 const SMTP_PASS = process.env.SMTP_PASS || '';
 const SMTP_FROM = process.env.SMTP_FROM || SMTP_USER || 'no-reply@example.com';
 
-const DB_PATH = IS_VERCEL ? '/tmp/attendance.db' : path.join(__dirname, 'attendance.db');
-const db = new Database(DB_PATH);
+const DATA_PATH = IS_VERCEL ? '/tmp/data.json' : path.join(__dirname, 'data.json');
+const PUBLIC_DIR = path.join(__dirname, 'public');
 
 const RSS_SOURCES = [
   { source_name: '고용노동부', category: '법령 개정사항', url: 'https://www.moel.go.kr/rss/release/law.xml' },
@@ -60,128 +61,44 @@ const FIELD_KEYWORDS = {
   '고용보험/지원': ['고용보험', '실업급여', '지원금', '고용안정']
 };
 
-db.exec(`
-CREATE TABLE IF NOT EXISTS events (
-  id TEXT PRIMARY KEY,
-  title TEXT NOT NULL,
-  meeting_date TEXT,
-  created_at TEXT NOT NULL
-);
+function defaultState() {
+  return {
+    events: [],
+    attendees: [],
+    labor_news: [],
+    report_logs: [],
+    seq: { attendee: 1, news: 1, log: 1 }
+  };
+}
 
-CREATE TABLE IF NOT EXISTS attendees (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  event_id TEXT NOT NULL,
-  consent INTEGER NOT NULL,
-  name TEXT NOT NULL,
-  workplace TEXT NOT NULL,
-  position TEXT NOT NULL,
-  phone TEXT NOT NULL,
-  email TEXT NOT NULL,
-  submitted_at TEXT NOT NULL,
-  UNIQUE(event_id, phone, email),
-  FOREIGN KEY(event_id) REFERENCES events(id)
-);
+function loadState() {
+  try {
+    if (!fs.existsSync(DATA_PATH)) return defaultState();
+    const parsed = JSON.parse(fs.readFileSync(DATA_PATH, 'utf8'));
+    return {
+      events: parsed.events || [],
+      attendees: parsed.attendees || [],
+      labor_news: parsed.labor_news || [],
+      report_logs: parsed.report_logs || [],
+      seq: parsed.seq || { attendee: 1, news: 1, log: 1 }
+    };
+  } catch {
+    return defaultState();
+  }
+}
 
-CREATE TABLE IF NOT EXISTS labor_news (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  source_name TEXT NOT NULL,
-  category TEXT NOT NULL,
-  field TEXT NOT NULL,
-  title TEXT NOT NULL,
-  link TEXT,
-  published_at TEXT NOT NULL,
-  period_month TEXT NOT NULL,
-  collected_at TEXT NOT NULL,
-  UNIQUE(title, link)
-);
+let state = loadState();
 
-CREATE TABLE IF NOT EXISTS report_logs (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  sent_at TEXT NOT NULL,
-  recipient_email_count INTEGER NOT NULL,
-  recipient_phone_count INTEGER NOT NULL,
-  item_count INTEGER NOT NULL,
-  status TEXT NOT NULL,
-  detail TEXT
-);
-`);
-
-const insertEvent = db.prepare(`
-  INSERT INTO events (id, title, meeting_date, created_at)
-  VALUES (@id, @title, @meeting_date, @created_at)
-`);
-
-const getEvent = db.prepare(`
-  SELECT id, title, meeting_date, created_at
-  FROM events
-  WHERE id = ?
-`);
-
-const listEvents = db.prepare(`
-  SELECT id, title, meeting_date, created_at
-  FROM events
-  ORDER BY datetime(created_at) DESC
-`);
-
-const insertAttendee = db.prepare(`
-  INSERT INTO attendees (
-    event_id, consent, name, workplace, position, phone, email, submitted_at
-  ) VALUES (
-    @event_id, @consent, @name, @workplace, @position, @phone, @email, @submitted_at
-  )
-`);
-
-const listAttendees = db.prepare(`
-  SELECT id, event_id, name, workplace, position, phone, email, submitted_at
-  FROM attendees
-  WHERE event_id = ?
-  ORDER BY datetime(submitted_at) ASC
-`);
-
-const listAllContacts = db.prepare(`
-  SELECT DISTINCT email, phone
-  FROM attendees
-  WHERE consent = 1
-`);
-
-const insertNews = db.prepare(`
-  INSERT OR IGNORE INTO labor_news (
-    source_name, category, field, title, link, published_at, period_month, collected_at
-  ) VALUES (
-    @source_name, @category, @field, @title, @link, @published_at, @period_month, @collected_at
-  )
-`);
-
-const listNewsAll = db.prepare(`
-  SELECT id, source_name, category, field, title, link, published_at, period_month, collected_at
-  FROM labor_news
-  ORDER BY datetime(published_at) DESC
-`);
-
-const listNewsMonths = db.prepare(`
-  SELECT DISTINCT period_month
-  FROM labor_news
-  ORDER BY period_month DESC
-`);
-
-const insertReportLog = db.prepare(`
-  INSERT INTO report_logs (
-    sent_at, recipient_email_count, recipient_phone_count, item_count, status, detail
-  ) VALUES (
-    @sent_at, @recipient_email_count, @recipient_phone_count, @item_count, @status, @detail
-  )
-`);
-
-const listReportLogs = db.prepare(`
-  SELECT id, sent_at, recipient_email_count, recipient_phone_count, item_count, status, detail
-  FROM report_logs
-  ORDER BY datetime(sent_at) DESC
-  LIMIT 50
-`);
+function persist() {
+  try {
+    fs.writeFileSync(DATA_PATH, JSON.stringify(state, null, 2), 'utf8');
+  } catch {
+    // 서버리스에서 쓰기 실패 시 메모리 상태만 유지
+  }
+}
 
 app.use(cors());
 app.use(express.json());
-const PUBLIC_DIR = path.join(__dirname, 'public');
 app.use(express.static(PUBLIC_DIR));
 
 function requiredString(value) {
@@ -228,8 +145,7 @@ function previousMonthKey(base = new Date()) {
 
 function quarterKey(monthKey) {
   const [y, m] = monthKey.split('-').map(Number);
-  const q = Math.floor((m - 1) / 3) + 1;
-  return `${y}-Q${q}`;
+  return `${y}-Q${Math.floor((m - 1) / 3) + 1}`;
 }
 
 function halfKey(monthKey) {
@@ -307,23 +223,25 @@ async function collectLaborNewsForMonth(targetMonth) {
 
     for (const item of items) {
       if (monthKeyFromDate(item.published_at) !== month) continue;
-      const payload = {
+      const exists = state.labor_news.some((n) => n.title === item.title && n.link === item.link);
+      if (exists) continue;
+
+      state.labor_news.push({
+        id: state.seq.news++,
         ...item,
         period_month: month,
         collected_at: collectedAt
-      };
-      const result = insertNews.run(payload);
-      if (result.changes > 0) inserted += 1;
+      });
+      inserted += 1;
     }
   }
 
+  persist();
   return { month, fetched, inserted };
 }
 
 function listNewsByPeriod(periodType, periodValue) {
-  const all = listNewsAll.all();
-
-  return all.filter((row) => {
+  return state.labor_news.filter((row) => {
     const month = row.period_month;
     if (periodType === 'month') return month === periodValue;
     if (periodType === 'quarter') return quarterKey(month) === periodValue;
@@ -339,9 +257,7 @@ function summarizeBy(items, key) {
     const k = item[key] || '기타';
     counter.set(k, (counter.get(k) || 0) + 1);
   }
-  return Array.from(counter.entries())
-    .map(([name, count]) => ({ name, count }))
-    .sort((a, b) => b.count - a.count);
+  return Array.from(counter.entries()).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count);
 }
 
 function buildReportHtml(items, label) {
@@ -353,9 +269,7 @@ function buildReportHtml(items, label) {
   }
 
   const sections = Array.from(byCategory.entries()).map(([category, rows]) => {
-    const line = rows
-      .map((r) => `<li>[${r.field}] <a href="${r.link || '#'}">${r.title}</a> <small>(${toKoreanDate(r.published_at)})</small></li>`)
-      .join('');
+    const line = rows.map((r) => `<li>[${r.field}] <a href="${r.link || '#'}">${r.title}</a> <small>(${toKoreanDate(r.published_at)})</small></li>`).join('');
     return `<h3>${category}</h3><ul>${line}</ul>`;
   }).join('');
 
@@ -364,16 +278,14 @@ function buildReportHtml(items, label) {
       <h2>고용노동부 소식 리포트 (${label})</h2>
       <p>생성 시각: ${toKoreanDate(new Date().toISOString())}</p>
       ${sections || '<p>해당 기간 신규 항목이 없습니다.</p>'}
-      <hr />
-      <p style="font-size:12px; color:#666;">본 메일은 참석 동의 기반 연락처로 자동 발송되었습니다.</p>
     </div>
   `;
 }
 
 function buildReportText(items, label) {
   const lines = [`[고용노동부 소식 리포트] ${label}`, `생성: ${toKoreanDate(new Date().toISOString())}`, ''];
-
   const byCategory = new Map();
+
   for (const item of items) {
     const key = item.category || '기타';
     if (!byCategory.has(key)) byCategory.set(key, []);
@@ -418,8 +330,7 @@ async function sendEmailReport(recipients, subject, textBody, htmlBody) {
 
 async function sendPeriodReport(periodType, periodValue) {
   const items = listNewsByPeriod(periodType, periodValue);
-  const contacts = listAllContacts.all();
-  const emails = [...new Set(contacts.map((c) => String(c.email || '').trim().toLowerCase()).filter(Boolean))];
+  const emails = [...new Set(state.attendees.filter((a) => a.consent === 1).map((a) => String(a.email || '').trim().toLowerCase()).filter(Boolean))];
 
   const label = `${periodType}:${periodValue}`;
   const subject = `[고용노동부 소식] ${label} 리포트`;
@@ -431,7 +342,9 @@ async function sendPeriodReport(periodType, periodValue) {
   try {
     const emailResult = await sendEmailReport(emails, subject, text, html);
     const status = emailResult.skipped ? 'SKIPPED' : 'SENT';
-    insertReportLog.run({
+
+    state.report_logs.push({
+      id: state.seq.log++,
       sent_at: now,
       recipient_email_count: emails.length,
       recipient_phone_count: 0,
@@ -439,6 +352,7 @@ async function sendPeriodReport(periodType, periodValue) {
       status,
       detail: JSON.stringify({ periodType, periodValue, emailResult })
     });
+    persist();
 
     return {
       status,
@@ -450,7 +364,9 @@ async function sendPeriodReport(periodType, periodValue) {
     };
   } catch (error) {
     const detail = String(error?.message || error);
-    insertReportLog.run({
+
+    state.report_logs.push({
+      id: state.seq.log++,
       sent_at: now,
       recipient_email_count: emails.length,
       recipient_phone_count: 0,
@@ -458,12 +374,13 @@ async function sendPeriodReport(periodType, periodValue) {
       status: 'ERROR',
       detail: JSON.stringify({ periodType, periodValue, error: detail })
     });
+    persist();
 
     return { status: 'ERROR', message: detail };
   }
 }
 
-if (AUTO_REPORT_ENABLED) {
+if (!IS_VERCEL && AUTO_REPORT_ENABLED) {
   cron.schedule(MONTHLY_REPORT_CRON, async () => {
     const targetMonth = previousMonthKey(new Date());
     await collectLaborNewsForMonth(targetMonth);
@@ -472,22 +389,13 @@ if (AUTO_REPORT_ENABLED) {
   }, { timezone: 'Asia/Seoul' });
 }
 
-if (FREQUENT_REPORT_ENABLED) {
+if (!IS_VERCEL && FREQUENT_REPORT_ENABLED) {
   cron.schedule(FREQUENT_REPORT_CRON, async () => {
-    const type = ['month', 'quarter', 'half', 'year'].includes(FREQUENT_REPORT_PERIOD_TYPE)
-      ? FREQUENT_REPORT_PERIOD_TYPE
-      : 'month';
+    const type = ['month', 'quarter', 'half', 'year'].includes(FREQUENT_REPORT_PERIOD_TYPE) ? FREQUENT_REPORT_PERIOD_TYPE : 'month';
     const month = monthKeyNow();
     await collectLaborNewsForMonth(month);
 
-    const value = type === 'month'
-      ? month
-      : type === 'quarter'
-        ? quarterKey(month)
-        : type === 'half'
-          ? halfKey(month)
-          : yearKey(month);
-
+    const value = type === 'month' ? month : type === 'quarter' ? quarterKey(month) : type === 'half' ? halfKey(month) : yearKey(month);
     const result = await sendPeriodReport(type, value);
     console.log('[FREQUENT_AUTO_REPORT]', result);
   }, { timezone: 'Asia/Seoul' });
@@ -498,16 +406,15 @@ app.get('/api/health', (_, res) => {
     status: 'ok',
     time: new Date().toISOString(),
     runtime: IS_VERCEL ? 'vercel-serverless' : 'node-server',
-    db_path: DB_PATH
+    data_path: DATA_PATH
   });
 });
 
-app.get('/', (_, res) => {
-  return res.sendFile(path.join(PUBLIC_DIR, 'index.html'));
-});
+app.get('/', (_, res) => res.sendFile(path.join(PUBLIC_DIR, 'index.html')));
 
 app.get('/api/events', (_, res) => {
-  res.json({ items: listEvents.all() });
+  const items = [...state.events].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+  res.json({ items });
 });
 
 app.post('/api/events', (req, res) => {
@@ -521,18 +428,19 @@ app.post('/api/events', (req, res) => {
     created_at: new Date().toISOString()
   };
 
-  insertEvent.run(event);
+  state.events.push(event);
+  persist();
   return res.status(201).json({ ...event, checkin_url: `${BASE_URL}/checkin.html?event=${event.id}` });
 });
 
 app.get('/api/events/:eventId', (req, res) => {
-  const event = getEvent.get(req.params.eventId);
+  const event = state.events.find((e) => e.id === req.params.eventId);
   if (!event) return res.status(404).json({ message: '회의를 찾을 수 없습니다.' });
   return res.json({ ...event, checkin_url: `${BASE_URL}/checkin.html?event=${event.id}` });
 });
 
 app.post('/api/events/:eventId/attendees', (req, res) => {
-  const event = getEvent.get(req.params.eventId);
+  const event = state.events.find((e) => e.id === req.params.eventId);
   if (!event) return res.status(404).json({ message: '유효하지 않은 회의입니다.' });
 
   const { consent, name, workplace, position, phone, email } = req.body || {};
@@ -548,59 +456,56 @@ app.post('/api/events/:eventId/attendees', (req, res) => {
     return res.status(400).json({ message: '이메일 형식이 올바르지 않습니다.' });
   }
 
-  const attendee = {
+  const phoneNorm = phone.trim();
+  const emailNorm = email.trim().toLowerCase();
+  const dup = state.attendees.some((a) => a.event_id === event.id && a.phone === phoneNorm && a.email === emailNorm);
+  if (dup) return res.status(409).json({ message: '이미 등록된 참석자입니다.' });
+
+  state.attendees.push({
+    id: state.seq.attendee++,
     event_id: event.id,
     consent: 1,
     name: name.trim(),
     workplace: workplace.trim(),
     position: position.trim(),
-    phone: phone.trim(),
-    email: email.trim().toLowerCase(),
+    phone: phoneNorm,
+    email: emailNorm,
     submitted_at: new Date().toISOString()
-  };
+  });
+  persist();
 
-  try {
-    insertAttendee.run(attendee);
-    return res.status(201).json({ message: '등록이 완료되었습니다.' });
-  } catch (error) {
-    if (String(error.message || '').includes('UNIQUE')) {
-      return res.status(409).json({ message: '이미 등록된 참석자입니다.' });
-    }
-    return res.status(500).json({ message: '등록 중 오류가 발생했습니다.' });
-  }
+  return res.status(201).json({ message: '등록이 완료되었습니다.' });
 });
 
 app.get('/api/events/:eventId/attendees', (req, res) => {
-  const event = getEvent.get(req.params.eventId);
+  const event = state.events.find((e) => e.id === req.params.eventId);
   if (!event) return res.status(404).json({ message: '회의를 찾을 수 없습니다.' });
-  const items = listAttendees.all(event.id);
-  return res.json({ event, count: items.length, items });
+
+  const items = state.attendees
+    .filter((a) => a.event_id === event.id)
+    .sort((a, b) => new Date(a.submitted_at) - new Date(b.submitted_at));
+
+  res.json({ event, count: items.length, items });
 });
 
 app.get('/api/events/:eventId/attendees.csv', (req, res) => {
-  const event = getEvent.get(req.params.eventId);
+  const event = state.events.find((e) => e.id === req.params.eventId);
   if (!event) return res.status(404).json({ message: '회의를 찾을 수 없습니다.' });
 
-  const rows = listAttendees.all(event.id);
-  const header = ['성명', '사업장명', '직책', '휴대전화번호', '이메일 주소', '제출시각'];
+  const rows = state.attendees
+    .filter((a) => a.event_id === event.id)
+    .sort((a, b) => new Date(a.submitted_at) - new Date(b.submitted_at));
 
+  const header = ['성명', '사업장명', '직책', '휴대전화번호', '이메일 주소', '제출시각'];
   const csvLines = [
     header.join(','),
-    ...rows.map((row) => [
-      row.name,
-      row.workplace,
-      row.position,
-      row.phone,
-      row.email,
-      row.submitted_at
-    ].map((v) => `"${String(v).replaceAll('"', '""')}"`).join(','))
+    ...rows.map((row) => [row.name, row.workplace, row.position, row.phone, row.email, row.submitted_at]
+      .map((v) => `"${String(v).replaceAll('"', '""')}"`).join(','))
   ];
 
   const csv = `\ufeff${csvLines.join('\n')}`;
-  const fileName = `attendees_${event.id}.csv`;
-
   res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-  res.setHeader('Content-Disposition', `attachment; filename=${fileName}`);
+  res.setHeader('Content-Disposition', `attachment; filename=attendees_${event.id}.csv`);
   return res.send(csv);
 });
 
@@ -618,26 +523,18 @@ app.get('/api/reports/period', (req, res) => {
     return res.status(400).json({ message: 'type은 month|quarter|half|year 중 하나여야 합니다.' });
   }
 
-  const items = listNewsByPeriod(periodType, periodValue);
+  const items = listNewsByPeriod(periodType, periodValue).sort((a, b) => new Date(b.published_at) - new Date(a.published_at));
   const byCategory = summarizeBy(items, 'category');
   const byField = summarizeBy(items, 'field');
 
-  return res.json({
-    period_type: periodType,
-    period_value: periodValue,
-    count: items.length,
-    by_category: byCategory,
-    by_field: byField,
-    items
-  });
+  return res.json({ period_type: periodType, period_value: periodValue, count: items.length, by_category: byCategory, by_field: byField, items });
 });
 
 app.get('/api/reports/available-periods', (_, res) => {
-  const months = listNewsMonths.all().map((r) => r.period_month);
+  const months = [...new Set(state.labor_news.map((r) => r.period_month))].sort().reverse();
   const quarters = [...new Set(months.map(quarterKey))].sort().reverse();
   const halves = [...new Set(months.map(halfKey))].sort().reverse();
   const years = [...new Set(months.map(yearKey))].sort().reverse();
-
   res.json({ months, quarters, halves, years });
 });
 
@@ -661,15 +558,13 @@ app.post('/api/reports/send-now', async (_, res) => {
 });
 
 app.get('/api/reports/logs', (_, res) => {
-  res.json({ items: listReportLogs.all() });
+  const items = [...state.report_logs].sort((a, b) => new Date(b.sent_at) - new Date(a.sent_at)).slice(0, 50);
+  res.json({ items });
 });
 
 if (!IS_VERCEL) {
   app.listen(PORT, () => {
     console.log(`Server running on ${BASE_URL}`);
-    console.log(`MAIL_PROVIDER=${MAIL_PROVIDER} SMTP_HOST=${SMTP_HOST} SMTP_PORT=${SMTP_PORT} SMTP_SECURE=${SMTP_SECURE}`);
-    console.log(`AUTO_REPORT_ENABLED=${AUTO_REPORT_ENABLED} MONTHLY_REPORT_CRON=${MONTHLY_REPORT_CRON}`);
-    console.log(`FREQUENT_REPORT_ENABLED=${FREQUENT_REPORT_ENABLED} FREQUENT_REPORT_CRON=${FREQUENT_REPORT_CRON} FREQUENT_REPORT_PERIOD_TYPE=${FREQUENT_REPORT_PERIOD_TYPE}`);
   });
 }
 
