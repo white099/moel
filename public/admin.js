@@ -1,6 +1,7 @@
 ﻿const createForm = document.getElementById('createEventForm');
 const createMsg = document.getElementById('createMsg');
 const portalLink = document.getElementById('portalLink');
+const portalPageQr = document.getElementById('portalPageQr');
 const copyPortalBtn = document.getElementById('copyPortalBtn');
 const portalMsg = document.getElementById('portalMsg');
 const eventPanel = document.getElementById('eventPanel');
@@ -290,11 +291,10 @@ collectMonthBtn.addEventListener('click', async () => {
     const data = await collectMonthlyNews();
     await loadAvailablePeriods();
     const failedSources = (data.source_stats || []).filter((s) => s.error);
-    const failText = failedSources.length
-      ? `, 실패 소스 ${failedSources.length}개`
-      : '';
+    const failText = failedSources.length ? `, 실패 소스 ${failedSources.length}개` : '';
     reportMsg.textContent = `${data.month} 수집 완료: 수집 ${data.fetched}건, 신규 저장 ${data.inserted}건${failText}`;
     reportMsg.className = 'msg success';
+
     collectSourceStats.innerHTML = (data.source_stats || []).map((s) => {
       const status = s.error ? `실패: ${escapeHtml(s.error)}` : '정상';
       return `<div class="report-item"><strong>[${escapeHtml(s.category)}] ${escapeHtml(s.source)}</strong><span>수집 ${s.fetched} / 저장 ${s.inserted} / ${status}</span></div>`;
@@ -375,6 +375,7 @@ importCsvBtn.addEventListener('click', async () => {
 
   importMsg.textContent = 'CSV 업로드 중...';
   importMsg.className = 'msg';
+
   try {
     const csvText = await file.text();
     const result = await importAttendeesCsv(currentEventId, csvText);
@@ -390,6 +391,15 @@ importCsvBtn.addEventListener('click', async () => {
 (async () => {
   portalLink.href = portalUrl;
   portalLink.textContent = portalUrl;
+  try {
+    await QRCode.toCanvas(portalPageQr, portalUrl, {
+      width: 220,
+      margin: 1
+    });
+  } catch (error) {
+    console.error(error);
+  }
+
   collectMonthInput.value = monthNowKey();
   try {
     await loadAvailablePeriods();
