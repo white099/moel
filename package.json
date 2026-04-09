@@ -2,7 +2,7 @@
   "name": "qr-attendance-roster",
   "version": "1.0.0",
   "private": true,
-  "description": "QR 기반 회의 참석자 명부 시스템",
+  "description": "QR attendance roster and labor report system",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
