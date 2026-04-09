@@ -43,7 +43,6 @@ const recipientSummary = document.getElementById('recipientSummary');
 const recipientList = document.getElementById('recipientList');
 const reportMsg = document.getElementById('reportMsg');
 const collectSourceStats = document.getElementById('collectSourceStats');
-const categorySummary = document.getElementById('categorySummary');
 const fieldSummary = document.getElementById('fieldSummary');
 const reportPreview = document.getElementById('reportPreview');
 const selectAllIssuesBtn = document.getElementById('selectAllIssuesBtn');
@@ -184,6 +183,16 @@ function updateIssueSelectionMessage() {
   const selected = getSelectedIssueIds().length;
   issueSelectMsg.textContent = `이슈 ${currentReportItems.length}건 중 ${selected}건 선택`;
   issueSelectMsg.className = 'msg';
+}
+
+function groupIssuesByField(items) {
+  const map = new Map();
+  items.forEach((item) => {
+    const field = item.field || '기타';
+    if (!map.has(field)) map.set(field, []);
+    map.get(field).push(item);
+  });
+  return Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0], 'ko'));
 }
 
 async function loadRecipientCandidates() {
@@ -356,15 +365,16 @@ async function loadPeriodSummary() {
   if (!res.ok) throw new Error(data.message || '기간 리포트 조회 실패');
 
   currentReportItems = data.items || [];
-  renderChips(categorySummary, data.by_category || []);
   renderChips(fieldSummary, data.by_field || []);
-
-  reportPreview.innerHTML = currentReportItems.map((item) => `
+  const grouped = groupIssuesByField(currentReportItems);
+  reportPreview.innerHTML = grouped.map(([field, rows]) => `
     <div class="report-item">
-      <label><input class="issue-check" type="checkbox" value="${Number(item.id)}" /> 발송 선택</label>
-      <strong>[${escapeHtml(item.category)} / ${escapeHtml(item.field)}]</strong>
-      <a href="${escapeHtml(item.link || '#')}" target="_blank" rel="noopener">${escapeHtml(item.title)}</a>
-      <span>${escapeHtml(item.published_at)}</span>
+      <strong>${escapeHtml(field)} (${rows.length}건)</strong>
+      ${rows.map((item) => `
+        <label><input class="issue-check" type="checkbox" value="${Number(item.id)}" /> ${escapeHtml(item.title)}</label>
+        <a href="${escapeHtml(item.link || '#')}" target="_blank" rel="noopener">${escapeHtml(item.link || '')}</a>
+        <span>${escapeHtml(item.published_at)}</span>
+      `).join('')}
     </div>
   `).join('');
 
