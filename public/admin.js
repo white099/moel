@@ -18,6 +18,13 @@ const csvFileInput = document.getElementById('csvFileInput');
 const importCsvBtn = document.getElementById('importCsvBtn');
 const importMsg = document.getElementById('importMsg');
 const eventMsg = document.getElementById('eventMsg');
+const rosterFilterDate = document.getElementById('rosterFilterDate');
+const rosterFilterEvent = document.getElementById('rosterFilterEvent');
+const rosterSearchBtn = document.getElementById('rosterSearchBtn');
+const rosterResetBtn = document.getElementById('rosterResetBtn');
+const rosterQueryMsg = document.getElementById('rosterQueryMsg');
+const rosterQuerySummary = document.getElementById('rosterQuerySummary');
+const rosterQueryBody = document.getElementById('rosterQueryBody');
 
 const collectMonthInput = document.getElementById('collectMonthInput');
 const collectMonthBtn = document.getElementById('collectMonthBtn');
@@ -80,6 +87,76 @@ async function createEvent(payload) {
   });
   const data = await res.json();
   if (!res.ok) throw new Error(data.message || '회의 생성 실패');
+  return data;
+}
+
+function eventLabel(event) {
+  if (event.meeting_date) return `${event.meeting_date} | ${event.title}`;
+  return event.title;
+}
+
+async function loadEventOptions(selectedId = '') {
+  const res = await fetch('/api/events');
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.message || '회의 목록 조회 실패');
+
+  const options = ['<option value="">전체 회의</option>']
+    .concat((data.items || []).map((ev) => `<option value="${escapeHtml(ev.id)}">${escapeHtml(eventLabel(ev))}</option>`));
+  rosterFilterEvent.innerHTML = options.join('');
+
+  if (selectedId) rosterFilterEvent.value = selectedId;
+}
+
+async function queryRosters() {
+  const params = new URLSearchParams();
+  if (rosterFilterDate.value) params.set('meeting_date', rosterFilterDate.value);
+  if (rosterFilterEvent.value) params.set('event_id', rosterFilterEvent.value);
+
+  const query = params.toString();
+  const url = query ? `/api/rosters?${query}` : '/api/rosters';
+  const res = await fetch(url);
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.message || '명부 통합 조회 실패');
+
+  const rowsHtml = [];
+  (data.rows || []).forEach((row) => {
+    const dateText = row.event?.meeting_date || '-';
+    const titleText = row.event?.title || '-';
+    const attendees = row.attendees || [];
+
+    if (!attendees.length) {
+      rowsHtml.push(`
+        <tr>
+          <td>${escapeHtml(dateText)}</td>
+          <td>${escapeHtml(titleText)}</td>
+          <td colspan="6">등록된 참석자가 없습니다.</td>
+        </tr>
+      `);
+      return;
+    }
+
+    attendees.forEach((it) => {
+      rowsHtml.push(`
+        <tr>
+          <td>${escapeHtml(dateText)}</td>
+          <td>${escapeHtml(titleText)}</td>
+          <td>${escapeHtml(it.name)}</td>
+          <td>${escapeHtml(it.workplace)}</td>
+          <td>${escapeHtml(it.position)}</td>
+          <td>${escapeHtml(it.phone)}</td>
+          <td>${escapeHtml(it.email)}</td>
+          <td>${escapeHtml(it.submitted_at)}</td>
+        </tr>
+      `);
+    });
+  });
+
+  rosterQueryBody.innerHTML = rowsHtml.join('');
+  if (!rowsHtml.length) {
+    rosterQueryBody.innerHTML = '<tr><td colspan="8">조회 결과가 없습니다.</td></tr>';
+  }
+
+  rosterQuerySummary.textContent = `조회 회의 ${data.total_events}건, 참석자 ${data.total_attendees}명`;
   return data;
 }
 
@@ -260,7 +337,9 @@ createForm.addEventListener('submit', async (e) => {
       meeting_date: formData.get('meeting_date')
     });
 
+    await loadEventOptions(event.id);
     await renderEvent(event);
+    await queryRosters();
     jumpToQrBtn.classList.remove('hidden');
     eventPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
     createMsg.textContent = '회의가 생성되었고 QR이 즉시 생성되었습니다.';
@@ -283,6 +362,32 @@ copyEventPortalBtn.addEventListener('click', async () => {
 });
 jumpToQrBtn.addEventListener('click', () => {
   eventPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+});
+rosterSearchBtn.addEventListener('click', async () => {
+  rosterQueryMsg.textContent = '명부 조회 중...';
+  rosterQueryMsg.className = 'msg';
+  try {
+    await queryRosters();
+    rosterQueryMsg.textContent = '명부 조회가 완료되었습니다.';
+    rosterQueryMsg.className = 'msg success';
+  } catch (err) {
+    rosterQueryMsg.textContent = err.message;
+    rosterQueryMsg.className = 'msg error';
+  }
+});
+rosterResetBtn.addEventListener('click', async () => {
+  rosterFilterDate.value = '';
+  rosterFilterEvent.value = '';
+  rosterQueryMsg.textContent = '초기화 후 전체 명부를 조회합니다...';
+  rosterQueryMsg.className = 'msg';
+  try {
+    await queryRosters();
+    rosterQueryMsg.textContent = '전체 명부 조회가 완료되었습니다.';
+    rosterQueryMsg.className = 'msg success';
+  } catch (err) {
+    rosterQueryMsg.textContent = err.message;
+    rosterQueryMsg.className = 'msg error';
+  }
 });
 
 periodType.addEventListener('change', async () => {
@@ -401,6 +506,8 @@ importCsvBtn.addEventListener('click', async () => {
 (async () => {
   collectMonthInput.value = monthNowKey();
   try {
+    await loadEventOptions();
+    await queryRosters();
     await loadAvailablePeriods();
   } catch {
     // no data yet

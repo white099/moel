@@ -550,6 +550,46 @@ app.get('/api/events/:eventId/attendees.csv', (req, res) => {
   return res.send(csv);
 });
 
+app.get('/api/rosters', (req, res) => {
+  const meetingDate = requiredString(req.query.meeting_date) ? String(req.query.meeting_date).trim() : null;
+  const eventId = requiredString(req.query.event_id) ? String(req.query.event_id).trim() : null;
+
+  let events = [...state.events];
+  if (meetingDate) events = events.filter((e) => e.meeting_date === meetingDate);
+  if (eventId) events = events.filter((e) => e.id === eventId);
+
+  events.sort((a, b) => {
+    const aKey = `${a.meeting_date || ''}|${a.created_at || ''}`;
+    const bKey = `${b.meeting_date || ''}|${b.created_at || ''}`;
+    return aKey.localeCompare(bKey);
+  });
+
+  const rows = events.map((event) => {
+    const attendees = state.attendees
+      .filter((a) => a.event_id === event.id)
+      .sort((a, b) => new Date(a.submitted_at) - new Date(b.submitted_at));
+
+    return {
+      event: {
+        id: event.id,
+        title: event.title,
+        meeting_date: event.meeting_date,
+        created_at: event.created_at
+      },
+      attendee_count: attendees.length,
+      attendees
+    };
+  });
+
+  const totalAttendees = rows.reduce((sum, r) => sum + r.attendee_count, 0);
+  return res.json({
+    filters: { meeting_date: meetingDate, event_id: eventId },
+    total_events: rows.length,
+    total_attendees: totalAttendees,
+    rows
+  });
+});
+
 app.post('/api/news/collect-monthly', async (req, res) => {
   const month = req.body?.month || monthKeyNow();
   const result = await collectLaborNewsForMonth(month);

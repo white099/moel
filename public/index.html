@@ -71,6 +71,45 @@
     </section>
 
     <section class="card">
+      <h2>일정별/회의별 참석자 명부 조회</h2>
+      <div class="grid-3">
+        <label>
+          회의일자
+          <input id="rosterFilterDate" type="date" />
+        </label>
+        <label>
+          회의 선택
+          <select id="rosterFilterEvent">
+            <option value="">전체 회의</option>
+          </select>
+        </label>
+        <div class="inline-actions">
+          <button id="rosterSearchBtn" type="button">명부 조회</button>
+          <button id="rosterResetBtn" type="button">초기화</button>
+        </div>
+      </div>
+      <p id="rosterQueryMsg" class="msg"></p>
+      <p id="rosterQuerySummary"></p>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>회의일자</th>
+              <th>회의명</th>
+              <th>성명</th>
+              <th>사업장명</th>
+              <th>직책</th>
+              <th>휴대전화번호</th>
+              <th>이메일 주소</th>
+              <th>제출시각</th>
+            </tr>
+          </thead>
+          <tbody id="rosterQueryBody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="card">
       <h2>노동 이슈 수집/리포트</h2>
       <div class="grid-3">
         <label>
