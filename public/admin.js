@@ -192,6 +192,19 @@ function updateIssueSelectionMessage() {
   issueSelectMsg.className = 'msg';
 }
 
+function bindIssueCheckboxes() {
+  document.querySelectorAll('.issue-check').forEach((el) => {
+    el.addEventListener('change', () => {
+      const targetValue = el.value;
+      const checked = el.checked;
+      document.querySelectorAll('.issue-check').forEach((other) => {
+        if (other.value === targetValue) other.checked = checked;
+      });
+      updateIssueSelectionMessage();
+    });
+  });
+}
+
 function groupIssuesByField(items) {
   const map = new Map();
   items.forEach((item) => {
@@ -395,9 +408,7 @@ async function loadPeriodSummary() {
   if (!currentReportItems.length) {
     reportPreview.innerHTML = '<p>해당 기간 수집 데이터가 없습니다. "선택 기간 신규 수집" 후 다시 조회해 주세요.</p>';
   }
-  document.querySelectorAll('.issue-check').forEach((el) => {
-    el.addEventListener('change', updateIssueSelectionMessage);
-  });
+  bindIssueCheckboxes();
   updateIssueSelectionMessage();
 
   return data;
@@ -629,9 +640,7 @@ collectPeriodBtn.addEventListener('click', async () => {
         </div>
       `;
     }).join('');
-    document.querySelectorAll('.issue-check').forEach((el) => {
-      el.addEventListener('change', updateIssueSelectionMessage);
-    });
+    bindIssueCheckboxes();
     updateIssueSelectionMessage();
   } catch (err) {
     reportMsg.textContent = err.message;
