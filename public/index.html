@@ -11,16 +11,6 @@
   <main class="container">
     <h1>회의 참석자 명부 관리자</h1>
     <section class="card">
-      <h2>QR 접속 페이지 노출</h2>
-      <p>아래 페이지를 공유하면 참석자가 회의를 선택해 QR로 바로 접속할 수 있습니다.</p>
-      <p><a id="portalLink" target="_blank" rel="noopener"></a></p>
-      <div class="row">
-        <button id="copyPortalBtn">포털 링크 복사</button>
-      </div>
-      <p class="msg" id="portalMsg"></p>
-    </section>
-
-    <section class="card">
       <h2>회의 생성</h2>
       <form id="createEventForm" class="grid-2">
         <label>
@@ -34,6 +24,16 @@
         <button type="submit">회의 만들기</button>
       </form>
       <p id="createMsg" class="msg"></p>
+    </section>
+
+    <section class="card">
+      <h2>QR 접속 페이지 노출</h2>
+      <p>아래 페이지를 공유하면 참석자가 회의를 선택해 QR로 바로 접속할 수 있습니다.</p>
+      <p><a id="portalLink" target="_blank" rel="noopener"></a></p>
+      <div class="row">
+        <button id="copyPortalBtn">포털 링크 복사</button>
+      </div>
+      <p class="msg" id="portalMsg"></p>
     </section>
 
     <section id="eventPanel" class="card hidden">
