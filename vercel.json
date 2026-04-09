@@ -2,12 +2,9 @@
   "version": 2,
   "functions": {
     "api/index.js": {
-      "runtime": "nodejs20.x",
       "includeFiles": "public/**"
     },
-    "api/health.js": {
-      "runtime": "nodejs20.x"
-    }
+    "api/health.js": {}
   },
   "routes": [
     {
