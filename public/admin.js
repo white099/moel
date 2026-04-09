@@ -201,7 +201,7 @@ function bindIssueCheckboxes() {
         if (other.value === targetValue) other.checked = checked;
       });
       updateIssueSelectionMessage();
-      refreshPdfPreviewIfVisible();
+      previewPeriodPdf();
     });
   });
 }
@@ -393,7 +393,7 @@ async function loadPeriodSummary() {
     <div class="report-item">
       <strong>${escapeHtml(field)} (${rows.length}건)</strong>
       ${rows.map((item) => `
-        <label><input class="issue-check" type="checkbox" value="${Number(item.id)}" ${selectedSet.has(Number(item.id)) ? 'checked' : ''} /> 이 이슈 선택</label>
+        <label><input class="issue-check" type="checkbox" value="${Number(item.id)}" ${selectedSet.has(Number(item.id)) ? 'checked' : ''} /> [이 이슈 선택]</label>
         <details>
           <summary>${escapeHtml(item.title)}</summary>
           <div>출처: ${escapeHtml(item.source_name || '-')}</div>
@@ -630,7 +630,7 @@ collectPeriodBtn.addEventListener('click', async () => {
     collectSourceStats.innerHTML = (data.source_stats || []).map((s) => {
       const status = s.error ? `실패: ${escapeHtml(s.error)}` : '정상';
       const preview = (s.items_preview || []).map((it) => `
-        <label><input class="issue-check" type="checkbox" value="${Number(it.id)}" ${selectedSet.has(Number(it.id)) ? 'checked' : ''} /> 이 이슈 선택</label>
+        <label><input class="issue-check" type="checkbox" value="${Number(it.id)}" ${selectedSet.has(Number(it.id)) ? 'checked' : ''} /> [이 이슈 선택]</label>
         <details class="report-item">
           <summary>${escapeHtml(it.title || '')}</summary>
           <span>${escapeHtml(it.published_at || '-')}</span>
